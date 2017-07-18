@@ -1,6 +1,7 @@
 package com.rie.LightingMQ.util;
 
 import io.netty.buffer.ByteBuf;
+import io.netty.handler.codec.marshalling.MarshallingEncoder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -33,6 +34,7 @@ public class DataUtil {
         return result;
     }
 
+    /*对象反序列化*/
     public static Object deserialize(byte[] bytes) {
 
         Object result = null;
