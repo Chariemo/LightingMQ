@@ -65,6 +65,10 @@ public class Message {
         this.seqId = seqId;
     }
 
+    public int getSeqId() {
+        return seqId;
+    }
+
     public byte[] getBody() {
         return body;
     }
