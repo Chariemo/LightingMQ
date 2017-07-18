@@ -25,7 +25,7 @@ public class ServerConfig extends Config{
     }
 
     public String getHost() {
-        return getString("LMQ.host");
+        return getString("LMQ.host", null);
     }
 
 
