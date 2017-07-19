@@ -1,7 +1,7 @@
 package com.rie.LightingMQ.connection;
 
 import com.rie.LightingMQ.message.Message;
-import com.rie.LightingMQ.util.MarshallingCodecFactory;
+import com.rie.LightingMQ.util.codec.MarshallingCodecFactory;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
@@ -25,7 +25,7 @@ public class Client {
     private final EventLoopGroup eventLoopGroup;
     private final EventExecutorGroup eventExecutorGroup;
     private boolean connected;
-    private Map<Integer, MessageFuture> responseCache = new ConcurrentHashMap<>();
+    private Map<Integer, ResponseFuture> responseCache = new ConcurrentHashMap<>();
     private Channel channel;
 
     public Client() {
@@ -62,9 +62,8 @@ public class Client {
             this.channel = future.channel();
             try {
                 future.sync();
-                LOGGER.info("connect {}:{} succeessfully.", host, port);
+                LOGGER.info("connect {}:{} successfully.", host, port);
                 connected = true;
-                channel.closeFuture().sync();
             } catch (InterruptedException e) {
                 throw new RuntimeException(e.getMessage(), e);
             }
@@ -88,25 +87,45 @@ public class Client {
     }
 
     class ClientHandler extends SimpleChannelInboundHandler<Message> {
+
+       /* @Override
+        public void channelActive(ChannelHandlerContext ctx) throws Exception {
+
+            ctx.writeAndFlush(Message.newRequestMessage()).addListener(new ChannelFutureListener() {
+                @Override
+                public void operationComplete(ChannelFuture channelFuture) throws Exception {
+
+                    if (channelFuture.isSuccess()) {
+                        System.out.println("send");
+                    }
+                    else {
+                        System.out.println("false");
+                    }
+                }
+            });
+        }*/
+
         @Override
         protected void messageReceived(ChannelHandlerContext channelHandlerContext, Message message) throws Exception {
 
             int id = message.getSeqId();
-            MessageFuture messageFuture = responseCache.get(id);
-            if (messageFuture != null) {
-                messageFuture.setSucceed_recieved(true);
-                messageFuture.setResponse(message);
-                messageFuture.release();
+            ResponseFuture responseFuture = responseCache.get(id);
+            if (responseFuture != null) {
+                System.out.println("receive response");
+                responseFuture.setSucceed_recieved(true);
+                responseFuture.setResponse(message);
+                responseFuture.release();
             }
             else {
 
             }
         }
+
     }
 
-    public MessageFuture write(final Message request) {
+    public ResponseFuture write(final Message request) {
 
-        final MessageFuture response = new MessageFuture(request.getSeqId());
+        final ResponseFuture response = new ResponseFuture(request.getSeqId());
         responseCache.put(request.getSeqId(), response);
 
         if (channel.isActive()) {
@@ -121,7 +140,6 @@ public class Client {
                     response.setSucceed_send(false);
                     response.setCause(channelFuture.cause());
                     LOGGER.warn("send the request to <{}> failed.({})", channelFuture.channel(), request);
-
                 }
             });
         }

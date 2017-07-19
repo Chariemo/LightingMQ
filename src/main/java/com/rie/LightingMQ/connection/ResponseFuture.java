@@ -8,7 +8,7 @@ import java.util.concurrent.TimeUnit;
 /**
  * Created by Charley on 2017/7/18.
  */
-public class MessageFuture {
+public class ResponseFuture {
 
     private final CountDownLatch valve = new CountDownLatch(1);
     private int id;
@@ -18,11 +18,11 @@ public class MessageFuture {
     private volatile boolean succeed_recieved;
 
 
-    public MessageFuture() {
+    public ResponseFuture() {
 
     }
 
-    public MessageFuture(int id) {
+    public ResponseFuture(int id) {
 
         this.id = id;
     }
