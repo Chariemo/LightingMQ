@@ -1,4 +1,4 @@
-package com.rie.LightingMQ.util;
+package com.rie.LightingMQ.util.codec;
 
 import io.netty.handler.codec.marshalling.*;
 import org.jboss.marshalling.MarshallerFactory;
@@ -12,21 +12,21 @@ public final class MarshallingCodecFactory {
 
     public static MarshallingDecoder newMarshallingDecoder() {
 
-        final MarshallerFactory marshallerFactory = Marshalling.getMarshallerFactory("serial");
+        final MarshallerFactory factory = Marshalling.getProvidedMarshallerFactory("serial");
         final MarshallingConfiguration configuration = new MarshallingConfiguration();
         configuration.setVersion(5);
-        UnmarshallerProvider provider = new DefaultUnmarshallerProvider(marshallerFactory, configuration);
-        MarshallingDecoder decoder = new MarshallingDecoder(provider);
+        UnmarshallerProvider provider = new DefaultUnmarshallerProvider(factory, configuration);
+        Decoder decoder = new Decoder(provider, 1024);
         return decoder;
     }
 
     public static MarshallingEncoder newMarshallingEncoder() {
 
-        final MarshallerFactory marshallerFactory = Marshalling.getMarshallerFactory("serial");
+        final MarshallerFactory factory = Marshalling.getProvidedMarshallerFactory("serial");
         final MarshallingConfiguration configuration = new MarshallingConfiguration();
         configuration.setVersion(5);
-        MarshallerProvider provider = new DefaultMarshallerProvider(marshallerFactory, configuration);
-        MarshallingEncoder encoder = new MarshallingEncoder(provider);
+        MarshallerProvider provider = new DefaultMarshallerProvider(factory, configuration);
+        Encoder encoder = new Encoder(provider);
         return encoder;
 
     }
