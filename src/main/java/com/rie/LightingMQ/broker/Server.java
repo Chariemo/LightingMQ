@@ -1,17 +1,19 @@
 package com.rie.LightingMQ.broker;
 
+import com.rie.LightingMQ.broker.requestHandlers.DefaultFetchRequestHandler;
+import com.rie.LightingMQ.broker.requestHandlers.DefaultProduceRequestHandler;
 import com.rie.LightingMQ.config.ServerConfig;
-import com.rie.LightingMQ.util.MarshallingCodecFactory;
+import com.rie.LightingMQ.message.Message;
+import com.rie.LightingMQ.util.codec.MarshallingCodecFactory;
 import com.rie.LightingMQ.util.PortScanUtil;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.buffer.PooledByteBufAllocator;
-import io.netty.channel.ChannelFuture;
-import io.netty.channel.ChannelInitializer;
-import io.netty.channel.ChannelOption;
-import io.netty.channel.EventLoopGroup;
+import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
+import io.netty.util.collection.IntObjectHashMap;
+import io.netty.util.collection.IntObjectMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -23,11 +25,14 @@ import java.util.Properties;
 public class Server {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(Server.class);
+    private static final RequestHandler DEFAULT_FETCHRH = new DefaultFetchRequestHandler();
+    private static final RequestHandler DEFAUTL_PRODUCERH = new DefaultProduceRequestHandler();
     private EventLoopGroup baseLoopGroup;
     private EventLoopGroup workerLoopGroup;
     private ServerBootstrap serverBootstrap;
     private ServerConfig config;
     private ChannelFuture channelFuture;
+    private IntObjectMap<RequestHandler> requestHandlers;
     private boolean started;
 
     public Server() {
@@ -62,6 +67,9 @@ public class Server {
         this.baseLoopGroup = new NioEventLoopGroup();
         this.workerLoopGroup = new NioEventLoopGroup();
         this.serverBootstrap = new ServerBootstrap();
+        this.requestHandlers = new IntObjectHashMap();
+        requestHandlers.put(RequestHandlerType.FETCH.value, DEFAULT_FETCHRH);
+        requestHandlers.put(RequestHandlerType.PRODUCE.value, DEFAUTL_PRODUCERH);
 
         serverBootstrap.group(baseLoopGroup, workerLoopGroup).channel(NioServerSocketChannel.class)
                 .option(ChannelOption.SO_BACKLOG, 1024)
@@ -75,10 +83,12 @@ public class Server {
             protected void initChannel(SocketChannel socketChannel) throws Exception {
                 socketChannel.pipeline().addLast(
                         MarshallingCodecFactory.newMarshallingDecoder(),
-                        MarshallingCodecFactory.newMarshallingEncoder()
+                        MarshallingCodecFactory.newMarshallingEncoder(),
+                        new ServerHandler()
                 );
             }
         });
+
 
         try {
             if (PortScanUtil.checkAvailablePort(config.getPort())) {
@@ -97,8 +107,41 @@ public class Server {
             LOGGER.error("Exception happen to start server: {}", e);
             throw new RuntimeException(e.getMessage(), e);
         }
-
     }
+
+    public void registerHandler(int handlerId, RequestHandler handler) {
+
+        requestHandlers.put(handlerId, handler);
+    }
+
+    class ServerHandler extends SimpleChannelInboundHandler<Message> {
+
+        @Override
+        protected void messageReceived(final ChannelHandlerContext channelHandlerContext, final Message message) throws Exception {
+
+            RequestHandler handler = requestHandlers.get(message.getReqHandlerType());
+            Message response = null;
+            if (handler != null) {
+                response = handler.requestHandle(message);
+                channelHandlerContext.writeAndFlush(response).addListener(new ChannelFutureListener() {
+                    @Override
+                    public void operationComplete(ChannelFuture channelFuture) throws Exception {
+                        if (channelFuture.isSuccess()) {
+                            LOGGER.info("send response for {} to {} succeed.", message, channelHandlerContext.channel());
+                        }
+                        else {
+                            LOGGER.info("send response for to {} succeed.", message, channelHandlerContext);
+                        }
+                    }
+                });
+            }
+            else {
+                response = Message.newExceptionMessage();
+                response.setSeqId(message.getSeqId());
+            }
+        }
+    }
+
 
     public void stop() {
 
