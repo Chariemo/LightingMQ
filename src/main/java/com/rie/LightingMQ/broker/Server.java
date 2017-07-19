@@ -12,6 +12,8 @@ import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
+import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
+import io.netty.handler.codec.LengthFieldPrepender;
 import io.netty.util.collection.IntObjectHashMap;
 import io.netty.util.collection.IntObjectMap;
 import org.slf4j.Logger;
@@ -82,8 +84,16 @@ public class Server {
             @Override
             protected void initChannel(SocketChannel socketChannel) throws Exception {
                 socketChannel.pipeline().addLast(
+                        /*decode*/
+                        //tcp粘包处理
+                        new LengthFieldBasedFrameDecoder(Integer.MAX_VALUE, 0, 4, 0, 4),
+                        //消息解码
                         MarshallingCodecFactory.newMarshallingDecoder(),
+
+                        //encode
+                        new LengthFieldPrepender(4),
                         MarshallingCodecFactory.newMarshallingEncoder(),
+
                         new ServerHandler()
                 );
             }
