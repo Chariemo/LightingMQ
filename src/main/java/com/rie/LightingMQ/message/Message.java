@@ -1,23 +1,22 @@
 package com.rie.LightingMQ.message;
 
-import com.rie.LightingMQ.util.DataUtil;
-import io.netty.buffer.ByteBuf;
+import java.io.Serializable;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * frame{head:[type(byte) + reqType(short) + seqId(int)] [body] [CRC32]} check with CRC32
  * Created by Charley on 2017/7/17.
  */
-public class Message {
+public class Message implements Serializable{
 
     private final static AtomicInteger SEQ = new AtomicInteger(1);
     public final static int HEAD_LEN = 1 + 2 + 4;
-    public final static int CRC_LEN = 4;
-    public final static int BODY_MAX_LEN = Integer.MAX_VALUE - HEAD_LEN - CRC_LEN;
+    public final static int CRC_LEN = Long.BYTES;
     private byte type; // CALL | REPLY | EXCEPTION
     private short reqHandlerType; // PRODUCER | FETCH
     private int seqId;
-    private transient byte[] body;
+    private List<Topic> body;
 
     public Message() {
 
@@ -69,75 +68,12 @@ public class Message {
         return seqId;
     }
 
-    public byte[] getBody() {
+    public List<Topic> getBody() {
         return body;
     }
 
-    public void setBody(byte[] body) {
+    public void setBody(List<Topic> body) {
         this.body = body;
-    }
-
-    public int getBodyLen() {
-
-        return this.body == null ? 0 : body.length;
-    }
-
-    public int getTotalLen() {
-
-        return this.HEAD_LEN + getBodyLen() + this.CRC_LEN;
-    }
-
-    public void writeToByteBuf(ByteBuf byteBuf) {
-
-        if (byteBuf != null) {
-
-            //write message head
-            byteBuf.writeByte(this.type);
-            byteBuf.writeShort(this.reqHandlerType);
-            byteBuf.writeInt(this.seqId);
-
-            //write message body
-            if (getBodyLen() > 0) {
-                byteBuf.writeBytes(this.body);
-            }
-
-            //write CRC
-            long crc32 = DataUtil.calculateCRC(byteBuf, byteBuf.readerIndex(), byteBuf.readableBytes() - 4);
-            byteBuf.writeLong(crc32);
-        }
-    }
-
-    public void readFromByteBuf(ByteBuf byteBuf) {
-
-        if (byteBuf != null) {
-            int len = byteBuf.readableBytes() - CRC_LEN;
-            long crc32 = DataUtil.calculateCRC(byteBuf, byteBuf.readerIndex(), byteBuf.readableBytes() - 4);
-
-            //read message head
-            byte type = byteBuf.readByte();
-            short reqHandlerType = byteBuf.readShort();
-            int seqId = byteBuf.readInt();
-
-            //read message body
-            int body_len = len - HEAD_LEN;
-            byte[] body = new byte[body_len];
-            byteBuf.readBytes(body);
-
-            //CRC CHECK
-            long crcRead = byteBuf.readUnsignedInt();
-            if (crcRead != crc32) {
-                byteBuf.discardReadBytes();
-                byteBuf.release();
-                throw new RuntimeException("CRC WRONG");
-            }
-
-            this.setType(type);
-            this.setReqHandlerType(reqHandlerType);
-            this.setSeqId(seqId);
-            this.setBody(this.body);
-
-            byteBuf.release();
-        }
     }
 
     @Override
@@ -148,7 +84,7 @@ public class Message {
         } else if (obj != null && obj.getClass() == Message.class) {
             Message message = (Message)obj;
             return this.type == message.type && this.reqHandlerType == message.reqHandlerType
-                    && this.seqId == message.seqId && getBodyLen() == message.getBodyLen();
+                    && this.seqId == message.seqId && this.body == message.body;
         }
         else {
             return false;

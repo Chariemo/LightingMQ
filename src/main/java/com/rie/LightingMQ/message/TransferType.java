@@ -21,7 +21,7 @@ public enum TransferType {
 
         TransferType result = null;
 
-        if (index > 0 || index < size) {
+        if (index >= 0 || index < size) {
             result = values()[index];
         }
         return result;
