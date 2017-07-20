@@ -5,9 +5,9 @@ package com.rie.LightingMQ.broker;
  */
 public enum RequestHandlerType {
 
-    FETCH((short)1),
-    PRODUCE((short)2),
-    REPLICA((short)3);
+    FETCH((short)0),
+    PUBLISH((short)1),
+    REPLICA((short)2);
 
     public final short value;
 

@@ -1,10 +1,11 @@
 package com.rie.LightingMQ.broker;
 
 import com.rie.LightingMQ.broker.requestHandlers.DefaultFetchRequestHandler;
-import com.rie.LightingMQ.broker.requestHandlers.DefaultProduceRequestHandler;
+import com.rie.LightingMQ.broker.requestHandlers.DefaultPublishRequestHandler;
 import com.rie.LightingMQ.config.ServerConfig;
 import com.rie.LightingMQ.message.Message;
-import com.rie.LightingMQ.util.codec.MarshallingCodecFactory;
+import com.rie.LightingMQ.message.TransferType;
+import com.rie.LightingMQ.util.codec.MarshallingCodeCFactory;
 import com.rie.LightingMQ.util.PortScanUtil;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.buffer.PooledByteBufAllocator;
@@ -14,12 +15,17 @@ import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
 import io.netty.handler.codec.LengthFieldPrepender;
+import io.netty.handler.logging.LogLevel;
+import io.netty.handler.logging.LoggingHandler;
+import io.netty.handler.timeout.IdleStateEvent;
+import io.netty.handler.timeout.IdleStateHandler;
 import io.netty.util.collection.IntObjectHashMap;
 import io.netty.util.collection.IntObjectMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Properties;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Created by Charley on 2017/7/18.
@@ -28,7 +34,7 @@ public class Server {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(Server.class);
     private static final RequestHandler DEFAULT_FETCHRH = new DefaultFetchRequestHandler();
-    private static final RequestHandler DEFAUTL_PRODUCERH = new DefaultProduceRequestHandler();
+    private static final RequestHandler DEFAUTL_PRODUCERH = new DefaultPublishRequestHandler();
     private EventLoopGroup baseLoopGroup;
     private EventLoopGroup workerLoopGroup;
     private ServerBootstrap serverBootstrap;
@@ -71,7 +77,7 @@ public class Server {
         this.serverBootstrap = new ServerBootstrap();
         this.requestHandlers = new IntObjectHashMap();
         requestHandlers.put(RequestHandlerType.FETCH.value, DEFAULT_FETCHRH);
-        requestHandlers.put(RequestHandlerType.PRODUCE.value, DEFAUTL_PRODUCERH);
+        requestHandlers.put(RequestHandlerType.PUBLISH.value, DEFAUTL_PRODUCERH);
 
         serverBootstrap.group(baseLoopGroup, workerLoopGroup).channel(NioServerSocketChannel.class)
                 .option(ChannelOption.SO_BACKLOG, 1024)
@@ -79,20 +85,23 @@ public class Server {
                 .childOption(ChannelOption.SO_KEEPALIVE, true)
                 .childOption(ChannelOption.SO_REUSEADDR, true)
                 .childOption(ChannelOption.ALLOCATOR, PooledByteBufAllocator.DEFAULT);
-        serverBootstrap.childHandler(new ChannelInitializer<SocketChannel>() {
+        serverBootstrap.handler(new LoggingHandler(LogLevel.ERROR))
+                .childHandler(new ChannelInitializer<SocketChannel>() {
 
             @Override
             protected void initChannel(SocketChannel socketChannel) throws Exception {
                 socketChannel.pipeline().addLast(
+                        //心跳
+                        new IdleStateHandler(10, 0, 0, TimeUnit.SECONDS),
                         /*decode*/
                         //tcp粘包处理
                         new LengthFieldBasedFrameDecoder(Integer.MAX_VALUE, 0, 4, 0, 4),
                         //消息解码
-                        MarshallingCodecFactory.newMarshallingDecoder(),
+                        MarshallingCodeCFactory.newMarshallingDecoder(),
 
                         //encode
                         new LengthFieldPrepender(4),
-                        MarshallingCodecFactory.newMarshallingEncoder(),
+                        MarshallingCodeCFactory.newMarshallingEncoder(),
 
                         new ServerHandler()
                 );
@@ -129,25 +138,77 @@ public class Server {
         @Override
         protected void messageReceived(final ChannelHandlerContext channelHandlerContext, final Message message) throws Exception {
 
-            RequestHandler handler = requestHandlers.get(message.getReqHandlerType());
             Message response = null;
-            if (handler != null) {
-                response = handler.requestHandle(message);
+
+            if (message.getType() == TransferType.HEARTBEAT.value) {
+                LOGGER.info("server receive heartbeat from client.");
+                response = Message.newHeartbeatMessage();
                 channelHandlerContext.writeAndFlush(response).addListener(new ChannelFutureListener() {
                     @Override
                     public void operationComplete(ChannelFuture channelFuture) throws Exception {
                         if (channelFuture.isSuccess()) {
-                            LOGGER.info("send response for {} to {} succeed.", message, channelHandlerContext.channel());
+                            LOGGER.info("send response for heartbeat message succeed");
                         }
                         else {
-                            LOGGER.info("send response for to {} succeed.", message, channelHandlerContext);
+                            LOGGER.warn("send response for heartbeat message failed");
                         }
                     }
                 });
             }
             else {
-                response = Message.newExceptionMessage();
-                response.setSeqId(message.getSeqId());
+                RequestHandler handler = requestHandlers.get(message.getReqHandlerType());
+                if (handler != null) {
+                    response = handler.requestHandle(message);
+                    channelHandlerContext.writeAndFlush(response).addListener(new ChannelFutureListener() {
+                        @Override
+                        public void operationComplete(ChannelFuture channelFuture) throws Exception {
+                            if (channelFuture.isSuccess()) {
+                                LOGGER.info("send response for ({}) to {} succeed.", message, channelHandlerContext.channel().remoteAddress());
+                            }
+                            else {
+                                LOGGER.info("send response for ({}) to {} failed.", message, channelHandlerContext.channel().remoteAddress());
+                            }
+                        }
+                    });
+                }
+                else {
+                    response = Message.newExceptionMessage();
+                    response.setSeqId(message.getSeqId());
+                }
+            }
+        }
+
+        @Override
+        public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+
+
+        }
+
+        @Override
+        public void channelActive(ChannelHandlerContext ctx) throws Exception {
+
+            LOGGER.info("client {} has connected.", ctx.channel().remoteAddress());
+        }
+
+        @Override
+        public void channelInactive(ChannelHandlerContext ctx) throws Exception {
+
+            LOGGER.info("client {} has closed.", ctx.channel().remoteAddress());
+        }
+
+        @Override
+        public void userEventTriggered(ChannelHandlerContext ctx, Object evt) throws Exception {
+
+            if (evt instanceof IdleStateEvent) {
+                IdleStateEvent event = (IdleStateEvent) evt;
+                switch (event.state()) {
+                    case READER_IDLE:
+                        LOGGER.info("---READER_IDLE---");
+                        ctx.close();
+                        break;
+                    default:
+                        break;
+                }
             }
         }
     }

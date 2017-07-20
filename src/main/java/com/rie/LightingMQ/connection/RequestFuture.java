@@ -8,32 +8,24 @@ import java.util.concurrent.TimeUnit;
 /**
  * Created by Charley on 2017/7/18.
  */
-public class ResponseFuture {
+public class RequestFuture {
 
     private final CountDownLatch valve = new CountDownLatch(1);
     private int id;
-    private Throwable cause;
     private volatile Message response;
     private volatile boolean succeed_send;
-    private volatile boolean succeed_recieved;
+    private Throwable cause;
 
-
-    public ResponseFuture() {
+    public RequestFuture() {
 
     }
 
-    public ResponseFuture(int id) {
+    public RequestFuture(int id) {
 
         this.id = id;
     }
 
-    public boolean isSucceed_recieved() {
-        return succeed_recieved;
-    }
 
-    public void setSucceed_recieved(boolean succeed_recieved) {
-        this.succeed_recieved = succeed_recieved;
-    }
 
     public int getId() {
         return id;
@@ -41,14 +33,6 @@ public class ResponseFuture {
 
     public void setId(int id) {
         this.id = id;
-    }
-
-    public Throwable getCause() {
-        return cause;
-    }
-
-    public void setCause(Throwable cause) {
-        this.cause = cause;
     }
 
     public void setResponse(Message response) {
@@ -61,6 +45,14 @@ public class ResponseFuture {
 
     public void setSucceed_send(boolean succeed_send) {
         this.succeed_send = succeed_send;
+    }
+
+    public Throwable getCause() {
+        return cause;
+    }
+
+    public void setCause(Throwable cause) {
+        this.cause = cause;
     }
 
     public Message waitResponse(long time, TimeUnit timeUnit) throws InterruptedException {

@@ -1,7 +1,9 @@
 package com.rie.LightingMQ.connection;
 
+import com.rie.LightingMQ.config.ServerConfig;
 import com.rie.LightingMQ.message.Message;
-import com.rie.LightingMQ.util.codec.MarshallingCodecFactory;
+import com.rie.LightingMQ.message.TransferType;
+import com.rie.LightingMQ.util.codec.MarshallingCodeCFactory;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
@@ -9,6 +11,10 @@ import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
 import io.netty.handler.codec.LengthFieldPrepender;
+import io.netty.handler.logging.LogLevel;
+import io.netty.handler.logging.LoggingHandler;
+import io.netty.handler.timeout.IdleStateEvent;
+import io.netty.handler.timeout.IdleStateHandler;
 import io.netty.util.concurrent.DefaultEventExecutorGroup;
 import io.netty.util.concurrent.EventExecutorGroup;
 import org.slf4j.Logger;
@@ -16,6 +22,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Created by Charley on 2017/7/17.
@@ -26,9 +33,11 @@ public class Client {
     private final Bootstrap bootstrap;
     private final EventLoopGroup eventLoopGroup;
     private final EventExecutorGroup eventExecutorGroup;
-    private boolean connected;
-    private Map<Integer, ResponseFuture> responseCache = new ConcurrentHashMap<>();
+    private volatile boolean connected;
+    private int maxReConnectNum = 3;
+    private Map<Integer, RequestFuture> responseCache = new ConcurrentHashMap<>();
     private Channel channel;
+    private ServerConfig config;
 
     public Client() {
 
@@ -44,23 +53,33 @@ public class Client {
         return client;
     }
 
+    public static Client newClientInstance(ServerConfig config) {
+
+        Client client = newClientInstance(config.getHost(), config.getPort());
+        client.setConfig(config);
+        return client;
+    }
+
     public void init(String host, int port) {
 
         if (!connected) {
             this.bootstrap.group(this.eventLoopGroup).channel(NioSocketChannel.class)
                     .option(ChannelOption.TCP_NODELAY, true)
-                    .option(ChannelOption.SO_KEEPALIVE, false)
+                    .option(ChannelOption.SO_KEEPALIVE, true)
                     .handler(new ChannelInitializer<SocketChannel>() {
                         protected void initChannel(SocketChannel socketChannel) throws Exception {
                             socketChannel.pipeline().addLast(
                                     eventExecutorGroup,
+                                    new LoggingHandler(LogLevel.ERROR),
+                                    //心跳
+                                    new IdleStateHandler(0, 0, 5, TimeUnit.SECONDS),
                                     //decode
                                     new LengthFieldBasedFrameDecoder(Integer.MAX_VALUE, 0, 4, 0, 4),
-                                    MarshallingCodecFactory.newMarshallingDecoder(),
+                                    MarshallingCodeCFactory.newMarshallingDecoder(),
 
                                     //encode
                                     new LengthFieldPrepender(4),
-                                    MarshallingCodecFactory.newMarshallingEncoder(),
+                                    MarshallingCodeCFactory.newMarshallingEncoder(),
 
                                     new ClientHandler()
                             );
@@ -70,7 +89,6 @@ public class Client {
             this.channel = future.channel();
             try {
                 future.sync();
-                LOGGER.info("connect {}:{} successfully.", host, port);
                 connected = true;
             } catch (InterruptedException e) {
                 throw new RuntimeException(e.getMessage(), e);
@@ -96,44 +114,84 @@ public class Client {
 
     class ClientHandler extends SimpleChannelInboundHandler<Message> {
 
-       /* @Override
-        public void channelActive(ChannelHandlerContext ctx) throws Exception {
-
-            ctx.writeAndFlush(Message.newRequestMessage()).addListener(new ChannelFutureListener() {
-                @Override
-                public void operationComplete(ChannelFuture channelFuture) throws Exception {
-
-                    if (channelFuture.isSuccess()) {
-                        System.out.println("send");
-                    }
-                    else {
-                        System.out.println("false");
-                    }
-                }
-            });
-        }*/
-
         @Override
         protected void messageReceived(ChannelHandlerContext channelHandlerContext, Message message) throws Exception {
 
-            int id = message.getSeqId();
-            ResponseFuture responseFuture = responseCache.get(id);
-            if (responseFuture != null) {
-                System.out.println("receive response");
-                responseFuture.setSucceed_recieved(true);
-                responseFuture.setResponse(message);
-                responseFuture.release();
+            if (message.getType() == TransferType.HEARTBEAT.value) {
+                LOGGER.info("client receive heartbeat message from server.");
             }
-            else {
-
+            else if (message.getType() == TransferType.EXCEPTION.value
+                    || message.getType() == TransferType.REPLY.value) {
+                int id = message.getSeqId();
+                RequestFuture responseFuture = responseCache.get(id);
+                if (responseFuture != null) {
+                    responseFuture.setResponse(message);
+                    responseFuture.release();
+                }
+                else {
+                    LOGGER.warn("request for response {} in cache was missing.", message);
+                }
             }
         }
 
+        @Override
+        public void userEventTriggered(ChannelHandlerContext ctx, Object evt) throws Exception {
+
+            if (evt instanceof IdleStateEvent) {
+                IdleStateEvent event = (IdleStateEvent) evt;
+                switch(event.state()) {
+                    case READER_IDLE:
+                        LOGGER.info("---READER_IDLE---");
+                        break;
+                    case WRITER_IDLE:
+                        LOGGER.info("---WRITER_IDLE---");
+                        break;
+                    case ALL_IDLE:
+                        LOGGER.info("---ALL_IDLE---");
+                        Message heartbeatMsg = Message.newHeartbeatMessage();
+                        LOGGER.info("send heartbeat message to server.");
+                        ctx.writeAndFlush(heartbeatMsg).addListener(new ChannelFutureListener() {
+                            @Override
+                            public void operationComplete(ChannelFuture channelFuture) throws Exception {
+                                if (channelFuture.isSuccess()) {
+                                    LOGGER.info("send heartbeat message success.");
+                                } else {
+                                    LOGGER.info("send heartbeat message failed.");
+                                    if (!reConnect()) {
+                                        stop();
+                                    }
+                                }
+                            }
+                        });
+                        break;
+                    default:
+                        break;
+                }
+            }
+        }
+
+        @Override
+        public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+
+            ctx.fireExceptionCaught(cause);
+        }
+
+        @Override
+        public void channelActive(ChannelHandlerContext ctx) throws Exception {
+
+            LOGGER.info("connected to server {}.", ctx.channel().remoteAddress());
+        }
+
+        @Override
+        public void channelInactive(ChannelHandlerContext ctx) throws Exception {
+
+            LOGGER.info("disconnected to server {}.", ctx.channel().remoteAddress());
+        }
     }
 
-    public ResponseFuture write(final Message request) {
+    public RequestFuture write(final Message request) {
 
-        final ResponseFuture response = new ResponseFuture(request.getSeqId());
+        final RequestFuture response = new RequestFuture(request.getSeqId());
         responseCache.put(request.getSeqId(), response);
 
         if (channel.isActive()) {
@@ -147,13 +205,43 @@ public class Client {
                     responseCache.remove(response.getId());
                     response.setSucceed_send(false);
                     response.setCause(channelFuture.cause());
-                    LOGGER.warn("send the request to <{}> failed.({})", channelFuture.channel(), request);
+                    LOGGER.warn("send the request({}) to {} failed.({})", request, channelFuture.channel().remoteAddress());
+                    if (!reConnect()) {
+                        stop();
+                    }
                 }
             });
         }
         return response;
     }
 
+    public boolean isConnected() {
+        return connected;
+    }
 
+    public ServerConfig getConfig() {
+        return config;
+    }
 
+    public void setConfig(ServerConfig config) {
+        this.config = config;
+    }
+
+    public boolean reConnect() {
+
+        int reConNum = 0;
+
+        do {
+            init(config.getHost(), config.getPort());
+            reConNum++;
+            if (!connected) {
+                try {
+                    TimeUnit.SECONDS.sleep(5);
+                } catch (InterruptedException e) {
+
+                }
+            }
+        } while(reConNum < maxReConnectNum && !connected);
+        return connected;
+    }
 }
