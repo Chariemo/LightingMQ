@@ -8,7 +8,7 @@ import org.jboss.marshalling.MarshallingConfiguration;
 /**
  * Created by Charley on 2017/7/18.
  */
-public final class MarshallingCodecFactory {
+public final class MarshallingCodeCFactory {
 
     public static MarshallingDecoder newMarshallingDecoder() {
 

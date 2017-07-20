@@ -23,7 +23,7 @@ public class Decoder extends MarshallingDecoder{
     @Override
     protected Object decode(ChannelHandlerContext ctx, ByteBuf byteBuf) throws Exception {
 
-        if (byteBuf != null) {
+        if (byteBuf != null && byteBuf.readableBytes() > Message.CRC_LEN) {
             long crc32 = DataUtil.calculateCRC(byteBuf, byteBuf.readerIndex(), byteBuf.readableBytes() - Message.CRC_LEN);
 
             //CRC CHECK
@@ -34,9 +34,9 @@ public class Decoder extends MarshallingDecoder{
                 byteBuf.release();
                 throw new RuntimeException("CRC WRONG");
             }
+            byteBuf.readerIndex(0);
+            byteBuf.writerIndex(byteBuf.readableBytes() - Message.CRC_LEN);
         }
-        byteBuf.readerIndex(0);
-        byteBuf.writerIndex(byteBuf.readableBytes() - Message.CRC_LEN);
         return super.decode(ctx, byteBuf);
     }
 }
