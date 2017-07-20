@@ -5,9 +5,10 @@ package com.rie.LightingMQ.message;
  */
 public enum TransferType {
 
-    CALL((byte)1),
-    REPLY((byte)2),
-    EXCEPTION((byte)3);
+    CALL((byte)0),
+    REPLY((byte)1),
+    EXCEPTION((byte)2),
+    HEARTBEAT((byte)3);
 
     public final byte value;
 

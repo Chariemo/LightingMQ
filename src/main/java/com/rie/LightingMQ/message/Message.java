@@ -1,5 +1,7 @@
 package com.rie.LightingMQ.message;
 
+import com.rie.LightingMQ.broker.RequestHandlerType;
+
 import java.io.Serializable;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -8,14 +10,16 @@ import java.util.concurrent.atomic.AtomicInteger;
  * frame{head:[type(byte) + reqType(short) + seqId(int)] [body] [CRC32]} check with CRC32
  * Created by Charley on 2017/7/17.
  */
-public class Message implements Serializable{
+public class Message implements Serializable {
 
     private final static AtomicInteger SEQ = new AtomicInteger(1);
     public final static int HEAD_LEN = 1 + 2 + 4;
     public final static int CRC_LEN = Long.BYTES;
-    private byte type; // CALL | REPLY | EXCEPTION
-    private short reqHandlerType; // PRODUCER | FETCH
+    //head
+    private byte type; // CALL | REPLY | EXCEPTION | HEARTBEAT
+    private short reqHandlerType; // PUBLISH | FETCH
     private int seqId;
+    //body
     private List<Topic> body;
 
     public Message() {
@@ -41,6 +45,13 @@ public class Message implements Serializable{
 
         Message message = new Message();
         message.setType(TransferType.EXCEPTION.value);
+        return message;
+    }
+
+    public static Message newHeartbeatMessage() {
+
+        Message message = new Message();
+        message.setType(TransferType.HEARTBEAT.value);
         return message;
     }
 
@@ -94,7 +105,7 @@ public class Message implements Serializable{
     @Override
     public String toString() {
 
-        return "type: " + this.type + " reqHandler: " + this.reqHandlerType + " " +
-                "reqId: " + this.seqId;
+        return "type: " + TransferType.valueOf(this.type) + " reqHandler: " + RequestHandlerType.valueOf(
+                this.reqHandlerType) + " reqId: " + this.seqId;
     }
 }
