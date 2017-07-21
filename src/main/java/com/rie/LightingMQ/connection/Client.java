@@ -72,7 +72,7 @@ public class Client {
                                     eventExecutorGroup,
                                     new LoggingHandler(LogLevel.ERROR),
                                     //心跳
-                                    new IdleStateHandler(0, 0, 5, TimeUnit.SECONDS),
+                                    new IdleStateHandler(0, 0, 10, TimeUnit.SECONDS),
                                     //decode
                                     new LengthFieldBasedFrameDecoder(Integer.MAX_VALUE, 0, 4, 0, 4),
                                     MarshallingCodeCFactory.newMarshallingDecoder(),
@@ -109,7 +109,6 @@ public class Client {
             this.channel.close();
         }
         connected = false;
-        LOGGER.info("channel:{} has closed.", this.channel);
     }
 
     class ClientHandler extends SimpleChannelInboundHandler<Message> {
