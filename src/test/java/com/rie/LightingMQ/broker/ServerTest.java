@@ -11,6 +11,6 @@ public class ServerTest {
 
         Properties config = new Properties();
         config.setProperty("LMQ.port", "6789");
-        Server server = Server.newServerInstance(config);
+        Server.newServerInstance(config);
     }
 }
