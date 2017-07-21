@@ -5,5 +5,5 @@ package com.rie.LightingMQ.producer;
  */
 public interface Service {
 
-    boolean service(Object... objects);
+    boolean service(Object... objects) throws InterruptedException;
 }
