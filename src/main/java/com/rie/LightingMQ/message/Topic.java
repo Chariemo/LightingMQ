@@ -9,9 +9,10 @@ import java.util.List;
  */
 public class Topic implements Serializable {
 
+    private final static int DEFAULT_CONTENTS_NUM = 20;
     private String topicName;
     private int readCounter;
-    private List<Serializable> contents = new ArrayList<Serializable>();
+    private List<Serializable> contents = new ArrayList<>(DEFAULT_CONTENTS_NUM);
 
     public Topic() {
 
