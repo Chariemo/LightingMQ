@@ -19,11 +19,14 @@ public class DefaultPublishRequestHandler implements RequestHandler{
     public Message requestHandle(Message request) {
 
         List<Topic> contents = request.getBody();
-        for (Topic topic : contents) {
-            System.out.println(topic.getContents());
-        }
 
-        Message response = Message.newExceptionMessage();
+        if (contents != null) {
+            System.out.println("have contents");
+        }
+        else {
+            System.out.println("no contents");
+        }
+        Message response = Message.newResponseMessage();
         response.setSeqId(request.getSeqId());
         return response;
     }

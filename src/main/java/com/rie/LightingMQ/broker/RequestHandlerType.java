@@ -7,7 +7,8 @@ public enum RequestHandlerType {
 
     FETCH((short)0),
     PUBLISH((short)1),
-    REPLICA((short)2);
+    REPLICA((short)2),
+    PRE_PUBLISH((short)3);
 
     public final short value;
 

@@ -1,6 +1,7 @@
 package com.rie.LightingMQ.broker;
 
 import com.rie.LightingMQ.broker.requestHandlers.DefaultFetchRequestHandler;
+import com.rie.LightingMQ.broker.requestHandlers.DefaultPrePublishRequestHandler;
 import com.rie.LightingMQ.broker.requestHandlers.DefaultPublishRequestHandler;
 import com.rie.LightingMQ.config.ServerConfig;
 import com.rie.LightingMQ.message.Message;
@@ -33,8 +34,9 @@ import java.util.concurrent.TimeUnit;
 public class Server {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(Server.class);
-    private static final RequestHandler DEFAULT_FETCHRH = new DefaultFetchRequestHandler();
-    private static final RequestHandler DEFAUTL_PRODUCERH = new DefaultPublishRequestHandler();
+    private static final RequestHandler DEFAULT_FETCH = new DefaultFetchRequestHandler();
+    private static final RequestHandler DEFAULT_PUBLISH = new DefaultPublishRequestHandler();
+    private static final RequestHandler DEFAULT_PRE_PUBLISH = new DefaultPrePublishRequestHandler();
     private EventLoopGroup baseLoopGroup;
     private EventLoopGroup workerLoopGroup;
     private ServerBootstrap serverBootstrap;
@@ -76,8 +78,9 @@ public class Server {
         this.workerLoopGroup = new NioEventLoopGroup();
         this.serverBootstrap = new ServerBootstrap();
         this.requestHandlers = new IntObjectHashMap();
-        requestHandlers.put(RequestHandlerType.FETCH.value, DEFAULT_FETCHRH);
-        requestHandlers.put(RequestHandlerType.PUBLISH.value, DEFAUTL_PRODUCERH);
+        requestHandlers.put(RequestHandlerType.FETCH.value, DEFAULT_FETCH);
+        requestHandlers.put(RequestHandlerType.PUBLISH.value, DEFAULT_PUBLISH);
+        requestHandlers.put(RequestHandlerType.PRE_PUBLISH.value, DEFAULT_PRE_PUBLISH);
 
         serverBootstrap.group(baseLoopGroup, workerLoopGroup).channel(NioServerSocketChannel.class)
                 .option(ChannelOption.SO_BACKLOG, 1024)
@@ -92,7 +95,8 @@ public class Server {
             protected void initChannel(SocketChannel socketChannel) throws Exception {
                 socketChannel.pipeline().addLast(
                         //心跳
-                        new IdleStateHandler(10, 0, 0, TimeUnit.SECONDS),
+                        new IdleStateHandler(20, 0, 0, TimeUnit.SECONDS),
+
                         /*decode*/
                         //tcp粘包处理
                         new LengthFieldBasedFrameDecoder(Integer.MAX_VALUE, 0, 4, 0, 4),
