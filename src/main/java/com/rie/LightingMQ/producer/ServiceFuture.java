@@ -12,18 +12,16 @@ public class ServiceFuture {
 
     private final static Logger LOGGER = LoggerFactory.getLogger(ServiceFuture.class);
     private final CountDownLatch valve = new CountDownLatch(1);
-    private ScheduledExecutorService schedule = Executors.newScheduledThreadPool(2);
+    private ExecutorService executor = Executors.newSingleThreadExecutor();
     private volatile boolean result = false;
     private final long timeOut;
-    private final long loopTime;
     private final TimeUnit timeUnit;
     private Service service;
     private Object[] vars;
 
-    public ServiceFuture(long timeOut, long loopTime, TimeUnit timeUnit) {
+    public ServiceFuture(long timeOut, TimeUnit timeUnit) {
 
         this.timeOut = timeOut;
-        this.loopTime = loopTime;
         this.timeUnit = timeUnit;
     }
 
@@ -32,24 +30,13 @@ public class ServiceFuture {
         this.service = service;
         this.vars = objects;
 
-        //轮询业务处理结果
-        schedule.scheduleAtFixedRate(new Runnable() {
-            @Override
-            public void run() {
-
-                if (result) {
-                    valve.countDown();
-                }
-            }
-        }, loopTime, loopTime, timeUnit);
-
-        schedule.schedule(new serviceTask(), 0, timeUnit);
+        executor.execute(new serviceTask());
     }
 
     public boolean waitServiceResult() throws InterruptedException {
 
         valve.await(timeOut, timeUnit);
-        schedule.shutdownNow();
+        executor.shutdownNow();
         return result;
     }
 
@@ -67,5 +54,4 @@ public class ServiceFuture {
             valve.countDown();
         }
     }
-
 }

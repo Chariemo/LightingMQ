@@ -52,7 +52,7 @@
             <version>5.0.0.Alpha2</version>
         </dependency>
 
-        <!--ProtoBuf 编解码-->
+        <!--JBoss Marshalling 编解码-->
         <!-- https://mvnrepository.com/artifact/org.jboss.marshalling/jboss-marshalling -->
         <dependency>
             <groupId>org.jboss.marshalling</groupId>

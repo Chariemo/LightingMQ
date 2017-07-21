@@ -8,6 +8,8 @@ import java.util.Properties;
  */
 public class ServerConfig extends Config{
 
+    private final static String DEFAULT_SERVER_CONFIF = "lightingMQ.properties";
+
     public ServerConfig(Properties properties) {
         super(properties);
     }
@@ -18,6 +20,12 @@ public class ServerConfig extends Config{
 
     public ServerConfig(File confFile) {
         super(confFile);
+    }
+
+    public static ServerConfig getDefaultServerConfig() {
+
+        String configPath = Thread.currentThread().getContextClassLoader().getResource(DEFAULT_SERVER_CONFIF).getPath();
+        return new ServerConfig(configPath);
     }
 
     public int getPort() {

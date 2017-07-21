@@ -71,6 +71,11 @@ public class Server {
         return newServerInstance(new ServerConfig(configPath));
     }
 
+    public static Server newServerInstance() {
+
+        return newServerInstance(ServerConfig.getDefaultServerConfig());
+    }
+
     public void init() {
 
         LOGGER.info("Server is starting.");
@@ -160,6 +165,7 @@ public class Server {
                 });
             }
             else {
+                System.out.println("server receive");
                 RequestHandler handler = requestHandlers.get(message.getReqHandlerType());
                 if (handler != null) {
                     response = handler.requestHandle(message);

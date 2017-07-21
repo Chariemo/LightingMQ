@@ -1,6 +1,6 @@
 package com.rie.LightingMQ.connection;
 
-import com.rie.LightingMQ.config.ServerConfig;
+import com.rie.LightingMQ.config.ConnectionConfig;
 import com.rie.LightingMQ.message.Message;
 import com.rie.LightingMQ.message.TransferType;
 import com.rie.LightingMQ.util.codec.MarshallingCodeCFactory;
@@ -37,7 +37,7 @@ public class Client {
     private int maxReConnectNum = 3;
     private Map<Integer, RequestFuture> responseCache = new ConcurrentHashMap<>();
     private Channel channel;
-    private ServerConfig config;
+    private ConnectionConfig config;
 
     public Client() {
 
@@ -53,7 +53,7 @@ public class Client {
         return client;
     }
 
-    public static Client newClientInstance(ServerConfig config) {
+    public static Client newClientInstance(ConnectionConfig config) {
 
         Client client = newClientInstance(config.getHost(), config.getPort());
         client.setConfig(config);
@@ -218,11 +218,11 @@ public class Client {
         return connected;
     }
 
-    public ServerConfig getConfig() {
+    public ConnectionConfig getConfig() {
         return config;
     }
 
-    public void setConfig(ServerConfig config) {
+    public void setConfig(ConnectionConfig config) {
         this.config = config;
     }
 
@@ -237,7 +237,8 @@ public class Client {
                 try {
                     TimeUnit.SECONDS.sleep(5);
                 } catch (InterruptedException e) {
-
+                    LOGGER.warn("interrupted while reconnect server.");
+                    throw new RuntimeException(e.getMessage(), e);
                 }
             }
         } while(reConNum < maxReConnectNum && !connected);

@@ -1,6 +1,8 @@
 package com.rie.LightingMQ.config;
 
 import com.rie.LightingMQ.util.Closer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -13,6 +15,7 @@ import java.util.Properties;
  */
 public class Config {
 
+    private final static Logger LOGGER = LoggerFactory.getLogger(Config.class);
     protected Properties properties;
 
     public Config(Properties properties) {
@@ -31,17 +34,15 @@ public class Config {
         FileInputStream fis = null;
 
         try {
-            if (confFile.exists()) {
-                fis = new FileInputStream(confFile);
-                properties.load(fis);
-            }
-            else {
-                throw new RuntimeException("config File is null");
-            }
+            fis = new FileInputStream(confFile);
+            properties.load(fis);
+
         } catch (FileNotFoundException e) {
-            e.printStackTrace();
+            LOGGER.warn("properties file is missing.");
+            throw new RuntimeException(e.getMessage(), e);
         } catch (IOException e) {
-            e.printStackTrace();
+            LOGGER.warn("something wrong while loading properties file.");
+            throw new RuntimeException(e.getMessage(), e);
         } finally {
             Closer.closeQuietly(fis);
         }
