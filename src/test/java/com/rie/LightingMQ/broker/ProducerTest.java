@@ -5,16 +5,15 @@ import com.rie.LightingMQ.producer.Producer;
 import com.rie.LightingMQ.producer.Service;
 
 import java.util.concurrent.TimeUnit;
-import java.util.logging.Logger;
 
 /**
  * Created by Charley on 2017/7/20.
  */
-public class ClientTest implements Service{
+public class ProducerTest implements Service{
 
     public static void main(String[] args) throws InterruptedException {
 
-        new ClientTest().test();
+        new ProducerTest().test();
     }
 
     public boolean test() throws InterruptedException {
