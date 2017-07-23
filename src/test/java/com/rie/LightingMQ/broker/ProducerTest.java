@@ -21,7 +21,7 @@ public class ProducerTest implements Service{
         Producer producer = Producer.newProducer();
         Topic topic = new Topic("yo");
         topic.addContent("charley");
-//        producer.bindService(this, "hello");
+        producer.bindService(this, "hello");
         if (producer.safePublish(12, TimeUnit.SECONDS, topic)) {
             System.out.println("ok>>>>>>>>>>>>>>>>>>>>>>");
         }

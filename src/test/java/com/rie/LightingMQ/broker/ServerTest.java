@@ -9,8 +9,6 @@ public class ServerTest {
 
     public static void main(String[] args) {
 
-        Properties config = new Properties();
-        config.setProperty("LMQ.port", "6789");
-        Server.newServerInstance(config);
+        Server.newServerInstance();
     }
 }
