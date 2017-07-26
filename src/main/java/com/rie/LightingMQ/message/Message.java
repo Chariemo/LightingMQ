@@ -16,6 +16,7 @@ public class Message implements Serializable {
     public final static int HEAD_LEN = 1 + 2 + 4;
     public final static int CRC_LEN = Long.BYTES;
     //head
+    private String id;
     private byte type; // CALL | REPLY | EXCEPTION | HEARTBEAT
     private short reqHandlerType; // PUBLISH | FETCH
     private int seqId;
@@ -81,6 +82,14 @@ public class Message implements Serializable {
 
     public List<Topic> getBody() {
         return body;
+    }
+
+    public String getId() {
+        return id;
+    }
+
+    public void setId(String id) {
+        this.id = id;
     }
 
     public void setBody(List<Topic> body) {

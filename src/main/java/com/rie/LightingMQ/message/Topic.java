@@ -52,6 +52,6 @@ public class Topic implements Serializable {
     @Override
     public String toString() {
 
-        return "topic: " + topicName + " counter: " + readCounter + " contents: " + contents;
+        return "topic: " + topicName + " readCounter: " + readCounter + " contents: " + contents;
     }
 }
