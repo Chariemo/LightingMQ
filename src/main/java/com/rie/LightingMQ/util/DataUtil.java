@@ -16,6 +16,37 @@ public class DataUtil {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(DataUtil.class);
 
+    public static byte[] serialize(Object object) {
+
+        ObjectOutputStream oos = null;
+        ByteArrayOutputStream baos = null;
+        try {
+            // 序列化
+            baos = new ByteArrayOutputStream();
+            oos = new ObjectOutputStream(baos);
+            oos.writeObject(object);
+            byte[] bytes = baos.toByteArray();
+            return bytes;
+        } catch (Exception e) {
+            LOGGER.error("serialize object ({}) wrong.", object);
+        }
+        return null;
+    }
+
+    public static Object deserialize(byte[] bytes) {
+
+        ByteArrayInputStream bais = null;
+        try {
+            // 反序列化
+            bais = new ByteArrayInputStream(bytes);
+            ObjectInputStream ois = new ObjectInputStream(bais);
+            return ois.readObject();
+        } catch (Exception e) {
+            LOGGER.error("deserialize to object wrong.");
+        }
+        return null;
+    }
+
     public static long calculateCRC(ByteBuf data, int offset, int len) {
 
         long result = 0L;
