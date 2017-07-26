@@ -11,6 +11,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.*;
@@ -21,20 +22,21 @@ import java.util.concurrent.*;
 public class Producer {
 
     private final static Logger LOGGER = LoggerFactory.getLogger(Producer.class);
-    private Client client;
-    private BlockingQueue<Message> reSendQueue = new LinkedBlockingDeque<>();
+    private static Client client;
     private Service service;
     private Object[] objects;
+    private static ConnectionConfig config;
+    private static final Producer PRODUCER = new Producer();
 
-    public Producer() {
+    private Producer() {
 
     }
 
     public static Producer newProducer(ConnectionConfig config) {
 
-        Producer producer = new Producer();
-        producer.setClient(Client.newClientInstance(config));
-        return producer;
+        Producer.config = config;
+        client = Client.newClientInstance(config);
+        return PRODUCER;
     }
 
     public static Producer newProducer() {
@@ -53,9 +55,6 @@ public class Producer {
         return newProducer(new ConnectionConfig(properties));
     }
 
-    public void setClient(Client client) {
-        this.client = client;
-    }
 
     public boolean unsafePublish(Topic topic) {
 
@@ -79,34 +78,35 @@ public class Producer {
 
         boolean result = false;
         Message response = null;
+        int reSendCounter = 0;
 
         if (client.reConnect()) {
             RequestFuture responseFuture = client.write(request);
 
-            try {
-                response = responseFuture.waitResponse(10, TimeUnit.SECONDS);
-            } catch (InterruptedException e) {
-                LOGGER.warn("interrupted while waiting for response <- {}.", request);
-                throw new RuntimeException(e.getMessage(), e);
-            }
-
-            if (response == null) {
-                LOGGER.warn("timeout while waiting for response <- {}.", request);
-                reSendQueue.add(request);
-            } else if (response.getType() == TransferType.EXCEPTION.value) {
-                LOGGER.error("something error send the request({}) to server.", request);
-            }
-            else {
-                result = true;
-            }
-
-            /*if (!reSendQueue.isEmpty()) {
-                ArrayList<Topic> list = new ArrayList<>(reSendQueue);
-                if (publish(list)) {
-                    result = true;
-                    reSendQueue.clear();
+            while (reSendCounter < config.getReSendTimes()) {
+                try {
+                    response = responseFuture.waitResponse(config.getResponseTimeOut(), TimeUnit.MILLISECONDS);
+                } catch (InterruptedException e) {
+                    LOGGER.warn("interrupted while waiting for response <- {}.", request);
+                    throw new RuntimeException(e.getMessage(), e);
                 }
-            }*/
+
+                if (response == null) {
+                    LOGGER.warn("timeout while waiting for response <- {}.", request);
+                    reSendCounter++;
+                }
+                else if (response.getType() == TransferType.EXCEPTION.value) {
+                    LOGGER.error("something wrong happened to server handling request {}.", request);
+                    break;
+                }
+                else {
+                    result = true;
+                    break;
+                }
+            }
+        }
+        else {
+            LOGGER.warn("can not reconnect to server when send {}.", request);
         }
 
         return result;
@@ -124,6 +124,7 @@ public class Producer {
         boolean result = false;
         Message request = Message.newRequestMessage();
         request.setReqHandlerType(RequestHandlerType.PRE_PUBLISH.value);
+        request.setId(getMessageId(request.getSeqId()));
         request.setBody(topics);
 
         if (send(request)) {
@@ -145,7 +146,14 @@ public class Producer {
                 throw new RuntimeException(e.getMessage(), e);
             }
         }
+        this.service = null;
+        this.objects = null;
         return result;
+    }
+
+    public String getMessageId(int seqId) {
+
+        return client.getChannel().localAddress().toString() + Thread.currentThread().toString() + seqId;
     }
 
     public void bindService(Service service, Object... objects) {

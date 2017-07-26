@@ -37,7 +37,7 @@ public class Client {
     private int maxReConnectNum = 3;
     private Map<Integer, RequestFuture> responseCache = new ConcurrentHashMap<>();
     private Channel channel;
-    private ConnectionConfig config;
+    private static ConnectionConfig config;
 
     public Client() {
 
@@ -55,8 +55,8 @@ public class Client {
 
     public static Client newClientInstance(ConnectionConfig config) {
 
+        Client.config = config;
         Client client = newClientInstance(config.getHost(), config.getPort());
-        client.setConfig(config);
         return client;
     }
 
@@ -70,9 +70,9 @@ public class Client {
                         protected void initChannel(SocketChannel socketChannel) throws Exception {
                             socketChannel.pipeline().addLast(
                                     eventExecutorGroup,
-                                    new LoggingHandler(LogLevel.ERROR),
+//                                    new LoggingHandler(LogLevel.ERROR),
                                     //心跳
-                                    new IdleStateHandler(0, 0, 10, TimeUnit.SECONDS),
+                                    new IdleStateHandler(0, 0, config.getAllIdleTime(), TimeUnit.MILLISECONDS),
                                     //decode
                                     new LengthFieldBasedFrameDecoder(Integer.MAX_VALUE, 0, 4, 0, 4),
                                     MarshallingCodeCFactory.newMarshallingDecoder(),
@@ -222,8 +222,8 @@ public class Client {
         return config;
     }
 
-    public void setConfig(ConnectionConfig config) {
-        this.config = config;
+    public Channel getChannel() {
+        return channel;
     }
 
     public boolean reConnect() {

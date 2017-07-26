@@ -7,14 +7,13 @@ import com.rie.LightingMQ.connection.RequestFuture;
 import com.rie.LightingMQ.message.Message;
 import com.rie.LightingMQ.message.Topic;
 import com.rie.LightingMQ.message.TransferType;
+import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.*;
-import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -27,66 +26,67 @@ public class Consumer {
     private static final Logger LOGGER = LoggerFactory.getLogger(Consumer.class);
     private static final int DEFAULT_SUBSCRIBER_NUM = 100;
     private static final int DEFAULT_TOPICS_NUM = 100;
-    private static final ExecutorService THREAD_POOL = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
-    private Client client;
+    private static Client client;
+    private static ConnectionConfig config;
     private ReadWriteLock readWriteLock = new ReentrantReadWriteLock();
     private Lock readLock = readWriteLock.readLock();
     private Lock writeLock = readWriteLock.writeLock();
     private Set<Subscriber> subscribers = new HashSet<>(DEFAULT_SUBSCRIBER_NUM);
-    private Set<String> topics = new HashSet<>(DEFAULT_TOPICS_NUM);
+    private Map<String, AtomicInteger> topics = new ConcurrentHashMap<>(DEFAULT_TOPICS_NUM);
+    private static final Consumer CONSUMER = new Consumer();
 
-    public Consumer() {
+    private Consumer() {
 
     }
 
-    public static Consumer newConsumerInstance(ConnectionConfig config) {
+    public static Consumer getConsumerInstance(ConnectionConfig config) {
 
-        Consumer consumer = new Consumer();
-        consumer.setClient(Client.newClientInstance(config));
-        return consumer;
+        Consumer.config = config;
+        client = Client.newClientInstance(config);
+        return CONSUMER;
     }
 
-    public static Consumer newConsumerInstance() {
+    public static Consumer getConsumerInstance() {
 
-        return newConsumerInstance(ConnectionConfig.getDefaultConConfig());
+        return getConsumerInstance(ConnectionConfig.getDefaultConConfig());
     }
 
-    public static Consumer newConsumerInstance(String configPath) {
+    public static Consumer getConsumerInstance(String configPath) {
 
-        return newConsumerInstance(new ConnectionConfig(configPath));
+        return getConsumerInstance(new ConnectionConfig(configPath));
     }
 
-    public static Consumer newConsumerInstance(Properties properties) {
+    public static Consumer getConsumerInstance(Properties properties) {
 
-        return newConsumerInstance(new ConnectionConfig(properties));
-    }
-
-    public void setClient(Client client) {
-        this.client = client;
+        return getConsumerInstance(new ConnectionConfig(properties));
     }
 
     public void fetch() {
 
         List<Topic> rtTopics = null;
-        topics.add("1");
-        topics.add("2");
         if (!topics.isEmpty()) {
-            rtTopics = fetch(topics.toArray(new String[0]));
+            rtTopics = fetch(topics.keySet().toArray(new String[0]));
         }
 
-        if (rtTopics != null) {
-            //TODO
-            for (Topic topic : rtTopics) {
-                System.out.println(topic);
+        if (rtTopics != null && !rtTopics.isEmpty()) {
+            readLock.lock();
+            try {
+                for (Topic topic : rtTopics) {
+                    for (Subscriber subscriber : subscribers) {
+                        if (null != subscriber.getTopics() && subscriber.getTopics().contains(topic.getTopicName())) {
+                            subscriber.notify(topic);
+                        }
+                    }
+                }
+            } finally {
+                readLock.unlock();
             }
         }
-
     }
 
     public List<Topic> fetch(String[] topics) {
 
         return fetch(Arrays.asList(topics));
-
     }
 
     public List<Topic> fetch(List<String> topics) {
@@ -102,16 +102,16 @@ public class Consumer {
             }
             Message request = Message.newRequestMessage();
             request.setReqHandlerType(RequestHandlerType.FETCH.value);
+            request.setId(getMessageId(request.getSeqId()));
             request.setBody(requestTopics);
 
             RequestFuture requestFuture = client.write(request);
             try {
-                response = requestFuture.waitResponse(10, TimeUnit.SECONDS);
+                response = requestFuture.waitResponse(config.getResponseTimeOut(), TimeUnit.MILLISECONDS);
             } catch (InterruptedException e) {
                 LOGGER.warn("interrupted while waiting for response <- {}.", request);
                 throw new RuntimeException(e.getMessage(), e);
             }
-
 
             if (response == null) {
                 LOGGER.warn("timeout while waiting for response <- {}.", request);
@@ -124,6 +124,11 @@ public class Consumer {
             }
         }
         return rtTopics;
+    }
+
+    public String getMessageId(int seqId) {
+
+        return client.getChannel().localAddress().toString() + Thread.currentThread().toString() + seqId;
     }
 
     private class Notice implements Callable {
@@ -142,4 +147,82 @@ public class Consumer {
         }
     }
 
+    public void stop() {
+
+        if (client != null) {
+            client.stop();
+        }
+    }
+
+    public void addSubscriber(Subscriber subscriber) {
+
+        writeLock.lock();
+        try {
+            if (null != subscriber && !subscribers.contains(subscriber)) {
+                subscribers.add(subscriber);
+                addSubTopic(subscriber.getTopics());
+            }
+        } finally {
+            writeLock.unlock();
+        }
+    }
+
+    public void delSubscriber(Subscriber subscriber) {
+
+        writeLock.lock();
+        try {
+            if (null != subscriber && subscribers.contains(subscriber)) {
+                subscribers.remove(subscriber);
+                delSubTopic(subscriber.getTopics());
+            }
+        } finally {
+            writeLock.unlock();
+        }
+    }
+
+    public void addSubTopic(Set<String> subTopics) {
+
+        if (subTopics != null && !subTopics.isEmpty()) {
+            for (String topicName : subTopics) {
+                if (StringUtils.isNotBlank(topicName)) {
+                    if (topics.containsKey(topicName)) {
+                        topics.get(topicName).incrementAndGet();
+                    }
+                    else {
+                        topics.put(topicName, new AtomicInteger(1));
+                    }
+                }
+            }
+        }
+    }
+
+    public void delSubTopic(Set<String> delTopics) {
+
+        if (null != delTopics && !delTopics.isEmpty()) {
+            for (String topicName : delTopics) {
+                if (topics.containsKey(topicName) && topics.get(topicName).decrementAndGet() == 0) {
+                    topics.remove(topicName);
+                }
+            }
+        }
+    }
+
+    public void startup() {
+
+        Executors.newSingleThreadScheduledExecutor().scheduleAtFixedRate(new Runnable() {
+
+            @Override
+            public void run() {
+                fetch();
+            }
+        }, 0, config.getConsumerPeriod(), TimeUnit.MILLISECONDS);
+    }
+
+    public Client getClient() {
+        return client;
+    }
+
+    public void setClient(Client client) {
+        this.client = client;
+    }
 }
