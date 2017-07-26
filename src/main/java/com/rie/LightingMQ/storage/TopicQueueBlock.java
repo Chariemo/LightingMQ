@@ -11,6 +11,8 @@ import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
+import java.util.Timer;
+import java.util.function.DoubleToIntFunction;
 
 /**
  * Created by Charley on 2017/7/23.
@@ -18,8 +20,8 @@ import java.nio.channels.FileChannel;
 public class TopicQueueBlock {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(TopicQueueBlock.class);
-    public static final String BLOCK_FILE_SUFFIX = ".lmq";  //数据文件后缀
-    public static final int BLOCK_SIZE = 32 * 1024 * 1024;  //32MB
+    public static final String BLOCK_FILE_SUFFIX = ".lmq_data";  //数据文件后缀
+    public static final int BLOCK_SIZE = 5 * 1024;  //5kB
     public static final int EOF = -1;
     private String blockFilePath;
     private Index index;
@@ -46,6 +48,7 @@ public class TopicQueueBlock {
 
         try {
             File file = new File(blockFilePath);
+            System.out.println("block file path: " + blockFilePath);
             blockFile = new RandomAccessFile(file, "rw");
             fileChannel = blockFile.getChannel();
             mappedByteBuffer = fileChannel.map(FileChannel.MapMode.READ_WRITE, 0, BLOCK_SIZE);
@@ -96,6 +99,7 @@ public class TopicQueueBlock {
         int len = data.length;
         int increment = len + Integer.BYTES;
         int writerIndex = index.getWriterIndex();
+        System.out.println("writeFileNo: " + index.getWriteFileNo() + " writerIndex: " + writerIndex);
         byteBuffer.position(writerIndex);
         byteBuffer.putInt(len);
         byteBuffer.put(data);
@@ -117,6 +121,7 @@ public class TopicQueueBlock {
         }
 
         byteBuffer.position(readerIndex);
+        System.out.println("readFileNo: " + readFileNo + " readerIndex: " + readerIndex);
         int dataLength = byteBuffer.getInt();
         if (dataLength <= 0) {
             return null;

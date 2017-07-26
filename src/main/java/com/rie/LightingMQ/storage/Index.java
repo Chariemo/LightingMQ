@@ -29,13 +29,13 @@ public interface Index {
 
     void setReaderIndex(int readerIndex);
 
-    void setReadCounter(int readable);
+    void setReadCounter(int readCounter);
 
     void setWriteFileNo(int writeFileNo);
 
     void setWriterIndex(int writerIndex);
 
-    void setWriteCounter(int writable);
+    void setWriteCounter(int writeCounter);
 
     void sync();
 

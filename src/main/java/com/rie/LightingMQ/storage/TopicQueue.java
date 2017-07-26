@@ -16,33 +16,31 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 public class TopicQueue extends AbstractQueue<byte[]>{
 
     private static final Logger LOGGER = LoggerFactory.getLogger(TopicQueue.class);
-    private String fileName;
+    private String fileDir;
     private Index index;
     private String queueName;
     private TopicQueueBlock readBlock;
-    private TopicQueueBlock replicaBlock;
     private TopicQueueBlock writeBlock;
     private ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
     private Lock readLock = lock.readLock();
     private Lock writeLock = lock.writeLock();
     private AtomicInteger size;
 
-    public TopicQueue(String queueName, String fileName, boolean backup) {
+    public TopicQueue(String queueName, String fileDir, boolean backup) {
 
         this.queueName = queueName;
-        this.fileName = fileName;
-
-        //todo index
+        this.fileDir = fileDir;
+        this.index = new IndexImpl(queueName, fileDir);
+        System.out.println("readFileNo: " + index.getReadFileNo() + " writeFileNo: " + index.getWriteFileNo());
+        System.out.println("readerIndex: "+ index.getReaderIndex() + " writerIndex: " + index.getWriterIndex());
         this.size = new AtomicInteger(index.getWriteCounter() - index.getReadCounter());
-
-        this.writeBlock = new TopicQueueBlock(TopicQueueBlock.formatBlockFilePath(fileName, queueName,
+        this.writeBlock = new TopicQueueBlock(TopicQueueBlock.formatBlockFilePath(fileDir, queueName,
                 index.getWriteFileNo()), index);
-
         if (index.getReadFileNo() == index.getWriteFileNo()) {
             this.readBlock = this.writeBlock.duplicate();
         }
         else {
-            this.readBlock = new TopicQueueBlock(TopicQueueBlock.formatBlockFilePath(fileName,
+            this.readBlock = new TopicQueueBlock(TopicQueueBlock.formatBlockFilePath(fileDir,
                     queueName, index.getReadFileNo()), index);
         }
     }
@@ -61,13 +59,13 @@ public class TopicQueue extends AbstractQueue<byte[]>{
 
         int nextWriteBlockFileNo = index.getWriteFileNo() + 1;
         writeBlock.setEof();
-        if (index.getReadFileNo() == index.getWriterIndex()) {
+        if (index.getReadFileNo() == index.getWriteFileNo()) {
             writeBlock.sync();
         }
         else {
             writeBlock.close();
         }
-        writeBlock = new TopicQueueBlock(TopicQueueBlock.formatBlockFilePath(fileName, queueName, nextWriteBlockFileNo),
+        writeBlock = new TopicQueueBlock(TopicQueueBlock.formatBlockFilePath(fileDir, queueName, nextWriteBlockFileNo),
                  index);
 
         index.setWriteFileNo(nextWriteBlockFileNo);
@@ -100,19 +98,20 @@ public class TopicQueue extends AbstractQueue<byte[]>{
         }
         readBlock.close();
         int nextReadBlockFileNo = index.getReadFileNo() + 1;
-        String oldBlockFilePaht = readBlock.getBlockFilePath();
+        String oldBlockFilePath = readBlock.getBlockFilePath();
         if (nextReadBlockFileNo == index.getWriteFileNo()) {
             readBlock = writeBlock.duplicate();
         }
         else {
-            readBlock = new TopicQueueBlock(TopicQueueBlock.formatBlockFilePath(fileName, queueName,
+            readBlock = new TopicQueueBlock(TopicQueueBlock.formatBlockFilePath(fileDir, queueName,
                     nextReadBlockFileNo), index);
         }
 
         index.setReadFileNo(nextReadBlockFileNo);
         index.setReaderIndex(0);
-        //todo delete oldBlockFile
+        TopicQueuePool.toClear(oldBlockFilePath);
     }
+
 
     @Override
     public byte[] poll() {
@@ -141,6 +140,16 @@ public class TopicQueue extends AbstractQueue<byte[]>{
 
     public Index getIndex() {
         return index;
+    }
+
+    public void sync() {
+
+        try {
+            index.sync();
+        } catch (Exception e) {
+            LOGGER.error("sync error", e);
+        }
+        writeBlock.sync();
     }
 
     public void close() {
