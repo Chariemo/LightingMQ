@@ -6,6 +6,7 @@ import com.rie.LightingMQ.broker.requestHandlers.DefaultPublishRequestHandler;
 import com.rie.LightingMQ.config.ServerConfig;
 import com.rie.LightingMQ.message.Message;
 import com.rie.LightingMQ.message.TransferType;
+import com.rie.LightingMQ.storage.TopicQueuePool;
 import com.rie.LightingMQ.util.codec.MarshallingCodeCFactory;
 import com.rie.LightingMQ.util.PortScanUtil;
 import io.netty.bootstrap.ServerBootstrap;
@@ -26,6 +27,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Properties;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -100,7 +103,7 @@ public class Server {
             protected void initChannel(SocketChannel socketChannel) throws Exception {
                 socketChannel.pipeline().addLast(
                         //心跳
-                        new IdleStateHandler(20, 0, 0, TimeUnit.SECONDS),
+                        new IdleStateHandler(config.getReadIdleTime(), 0, 0, TimeUnit.MILLISECONDS),
 
                         /*decode*/
                         //tcp粘包处理
@@ -129,6 +132,9 @@ public class Server {
                 this.started = true;
                 LOGGER.info("server: {} has started.", channelFuture.channel());
                 Runtime.getRuntime().addShutdownHook(new ShutdownThread());
+
+                TopicQueuePool.singletonInstance(config);
+
                 channelFuture.channel().closeFuture().sync();
             }
         } catch (InterruptedException e) {
@@ -165,7 +171,6 @@ public class Server {
                 });
             }
             else {
-                System.out.println("server receive");
                 RequestHandler handler = requestHandlers.get(message.getReqHandlerType());
                 if (handler != null) {
                     response = handler.requestHandle(message);
@@ -191,7 +196,7 @@ public class Server {
         @Override
         public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
 
-
+            ctx.fireExceptionCaught(cause);
         }
 
         @Override
@@ -234,6 +239,8 @@ public class Server {
                 channelFuture.channel().close();
             }
             LOGGER.info("The Server:{} has stopped.", channelFuture.channel());
+
+            TopicQueuePool.close();
         }
     }
 
@@ -243,5 +250,6 @@ public class Server {
             Server.this.stop();
         }
     }
+
 
 }

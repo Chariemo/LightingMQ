@@ -3,9 +3,14 @@ package com.rie.LightingMQ.broker.requestHandlers;
 import com.rie.LightingMQ.broker.RequestHandler;
 import com.rie.LightingMQ.message.Message;
 import com.rie.LightingMQ.message.Topic;
+import com.rie.LightingMQ.storage.TopicQueue;
+import com.rie.LightingMQ.storage.TopicQueuePool;
+import com.rie.LightingMQ.util.DataUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -19,13 +24,26 @@ public class DefaultFetchRequestHandler implements RequestHandler{
     public Message requestHandle(Message request) {
 
         Message response = Message.newResponseMessage();
-        System.out.println("get request: " + request.getSeqId());
         List<Topic> list = request.getBody();
+        List<Topic> resList = new ArrayList<>(list.size());
         for (Topic topic : list) {
-            System.out.println("sub: " + topic.getTopicName());
-            topic.addContent("yes i do");
+            Topic temp = null;
+            TopicQueue topicQueue = TopicQueuePool.getTopicQueue(topic.getTopicName());
+            if (topicQueue != null) {
+                byte[] bytes = topicQueue.poll();
+                if (bytes != null) {
+                    temp = (Topic) DataUtil.deserialize(bytes);
+                }
+            }
+
+            if (temp != null) {
+                resList.add(temp);
+            }
+            else {
+                System.out.println("null");
+            }
         }
-        response.setBody(list);
+        response.setBody(resList);
         response.setSeqId(request.getSeqId());
         return response;
     }
