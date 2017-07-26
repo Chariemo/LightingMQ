@@ -4,6 +4,7 @@ import com.rie.LightingMQ.message.Topic;
 import com.rie.LightingMQ.producer.Producer;
 import com.rie.LightingMQ.producer.Service;
 
+import java.nio.ByteBuffer;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -19,16 +20,20 @@ public class ProducerTest implements Service{
     public boolean test() throws InterruptedException {
 
         Producer producer = Producer.newProducer();
-        Topic topic = new Topic("yo");
-        topic.addContent("charley");
-        producer.bindService(this, "hello");
-        if (producer.safePublish(12, TimeUnit.SECONDS, topic)) {
-            System.out.println("ok>>>>>>>>>>>>>>>>>>>>>>");
+        int i = 0;
+        while (i < 100) {
+            Topic topic = new Topic("test");
+            topic.addContent("content-" + i);
+            producer.bindService(this, "sleep 1 second");
+            if (producer.safePublish(12, TimeUnit.SECONDS, topic)) {
+                i++;
+                System.out.println("send: " + topic);
+                System.out.println("ok>>>>>>>>>>>>>>>>>>>>>>");
+            }
+            else {
+                System.out.println("failed>>>>>>>>>>>>>>>>>>>");
+            }
         }
-        else {
-            System.out.println("failed>>>>>>>>>>>>>>>>>>>");
-        }
-        producer.unsafePublish(topic);
         producer.stop();
         return false;
     }
@@ -36,8 +41,8 @@ public class ProducerTest implements Service{
     @Override
     public boolean service(Object... objects) throws InterruptedException {
 
-        System.out.println("here: " + objects[0]);
-        TimeUnit.SECONDS.sleep(10);
+        System.out.println("service: " + objects[0]);
+        TimeUnit.SECONDS.sleep(2);
         return true;
     }
 }

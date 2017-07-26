@@ -11,15 +11,16 @@ public class ConsumerTest {
 
     public static void main(String[] args) {
 
-        Consumer consumer = Consumer.newConsumerInstance();
-        consumer.fetch();
+        Consumer consumer = Consumer.getConsumerInstance();
         Subscriber subscriber = new Subscriber(consumer) {
             @Override
             public void notify(Topic topic) {
                 System.out.println("read: " + topic);
             }
         };
-        subscriber.subscribTopic("hello");
-
+        subscriber.subscribeTopic("test");
+        consumer.addSubscriber(subscriber);
+        consumer.startup();
+//        subscriber.pull();
     }
 }
