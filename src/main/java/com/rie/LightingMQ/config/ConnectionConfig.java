@@ -33,6 +33,27 @@ public class ConnectionConfig extends Config{
     }
 
     public String getHost() {
+
         return getString("connection.host", null);
+    }
+
+    public int getResponseTimeOut() {
+
+        return getInt("responseTimeOut", 5000);
+    }
+
+    public int getReSendTimes() {
+
+        return getInt("reSendTimes", 3);
+    }
+
+    public int getAllIdleTime() {
+
+        return getInt("allIdleTime", 10000);
+    }
+
+    public int getConsumerPeriod() {
+
+        return getInt("consumer.period", 60000);
     }
 }

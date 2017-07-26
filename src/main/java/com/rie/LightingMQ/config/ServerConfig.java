@@ -36,5 +36,13 @@ public class ServerConfig extends Config{
         return getString("LMQ.host", null);
     }
 
+    public String getDataDir() {
+
+        return getString("LMQ.dataDir", null);
+    }
+
+    public int getReadIdleTime() {
+        return getInt("readIdleTime", 20000);
+    }
 
 }
