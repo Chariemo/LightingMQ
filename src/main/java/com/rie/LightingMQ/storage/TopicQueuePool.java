@@ -53,6 +53,7 @@ public class TopicQueuePool {
 
         //扫描该目录下的所有index文件 获取相应topic queue
         this.queueMap = scanDir(fileDir, false);
+
         scheduler.scheduleAtFixedRate(new Runnable() {
 
             @Override
@@ -102,10 +103,21 @@ public class TopicQueuePool {
         String oldFilePath = DELETING_QUEUE.poll();
         if (StringUtils.isNotBlank(oldFilePath)) {
             File oldFile = new File(oldFilePath);
-            if (!oldFile.delete()) {
-                LOGGER.warn("block file: {} delete failed.", oldFilePath);
+            if (getTimeFromLastMod(oldFile) > 48) {
+                oldFile.setReadable(false);
+                if (!oldFile.delete()) {
+                    LOGGER.warn("block file: {} delete failed.", oldFilePath);
+                }
             }
         }
+    }
+
+    private long getTimeFromLastMod(File file) {
+
+        long currentTime = System.currentTimeMillis();
+        long lastModifyTime = file.lastModified();
+        return ((currentTime - lastModifyTime) / (1000 * 60 * 60));
+
     }
 
     private void shutdown() {

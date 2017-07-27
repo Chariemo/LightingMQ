@@ -58,10 +58,10 @@ public class IndexImpl implements Index {
                 this.indexFileChannel = indexFile.getChannel();
                 this.index = indexFileChannel.map(FileChannel.MapMode.READ_WRITE, 0, INDEX_SIZE);
                 setMagic();
-                setReadFileNo(0);
+                setReadFileNo(1);
                 setReaderIndex(0);
                 setReadCounter(0);
-                setWriteFileNo(0);
+                setWriteFileNo(1);
                 setWriterIndex(0);
                 setWriteCounter(0);
             }

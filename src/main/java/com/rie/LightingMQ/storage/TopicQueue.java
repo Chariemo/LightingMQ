@@ -1,6 +1,7 @@
 package com.rie.LightingMQ.storage;
 
 import org.apache.commons.lang3.ArrayUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -20,6 +21,7 @@ public class TopicQueue extends AbstractQueue<byte[]>{
     private Index index;
     private String queueName;
     private TopicQueueBlock readBlock;
+    private TopicQueueBlock offsetReadBlock;
     private TopicQueueBlock writeBlock;
     private ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
     private Lock readLock = lock.readLock();
@@ -126,6 +128,37 @@ public class TopicQueue extends AbstractQueue<byte[]>{
             if (result != null) {
                 size.incrementAndGet();
             }
+            return result;
+        } finally {
+            readLock.unlock();
+        }
+    }
+
+    public byte[] offsetRead(int fileNo, int offset) {
+
+        byte[] result = null;
+        if (null != offsetReadBlock) {
+            String blockFilePath = offsetReadBlock.getBlockFilePath();
+            String[] nameNodes = blockFilePath.split("_");
+            if (nameNodes.length > 2 && StringUtils.isNotBlank(nameNodes[2])) {
+                String curFileNo = nameNodes[2].split(".")[0];
+                if (StringUtils.isNotBlank(curFileNo) && !StringUtils.equals("" + fileNo, curFileNo)) {
+                    this.offsetReadBlock.close();
+                    this.offsetReadBlock = new TopicQueueBlock(TopicQueueBlock.formatBlockFilePath(
+                            fileDir, queueName, fileNo
+                    ), null);
+                }
+            }
+        }
+        else {
+            offsetReadBlock = new TopicQueueBlock(TopicQueueBlock.formatBlockFilePath(
+                    fileDir, queueName, fileNo
+            ), null);
+        }
+
+        readLock.lock();
+        try {
+            result = offsetReadBlock.read(offset);
             return result;
         } finally {
             readLock.unlock();
