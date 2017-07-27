@@ -131,22 +131,6 @@ public class Consumer {
         return client.getChannel().localAddress().toString() + Thread.currentThread().toString() + seqId;
     }
 
-    private class Notice implements Callable {
-
-        private List<Topic> rtTopic;
-
-        public Notice(List<Topic> rtTopic) {
-
-            this.rtTopic = rtTopic;
-        }
-
-        @Override
-        public Object call() throws Exception {
-
-            return null;
-        }
-    }
-
     public void stop() {
 
         if (client != null) {

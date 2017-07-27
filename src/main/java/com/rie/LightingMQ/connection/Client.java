@@ -11,8 +11,6 @@ import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
 import io.netty.handler.codec.LengthFieldPrepender;
-import io.netty.handler.logging.LogLevel;
-import io.netty.handler.logging.LoggingHandler;
 import io.netty.handler.timeout.IdleStateEvent;
 import io.netty.handler.timeout.IdleStateHandler;
 import io.netty.util.concurrent.DefaultEventExecutorGroup;
@@ -20,6 +18,7 @@ import io.netty.util.concurrent.EventExecutorGroup;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.net.SocketAddress;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
@@ -34,10 +33,10 @@ public class Client {
     private final EventLoopGroup eventLoopGroup;
     private final EventExecutorGroup eventExecutorGroup;
     private volatile boolean connected;
-    private int maxReConnectNum = 3;
     private Map<Integer, RequestFuture> responseCache = new ConcurrentHashMap<>();
     private Channel channel;
     private static ConnectionConfig config;
+    private SocketAddress localAddress;
 
     public Client() {
 
@@ -89,6 +88,7 @@ public class Client {
             this.channel = future.channel();
             try {
                 future.sync();
+                localAddress = channel.localAddress();
                 connected = true;
             } catch (InterruptedException e) {
                 throw new RuntimeException(e.getMessage(), e);
@@ -184,6 +184,7 @@ public class Client {
         @Override
         public void channelInactive(ChannelHandlerContext ctx) throws Exception {
 
+            Client.this.connected = false;
             LOGGER.info("disconnected to server {}.", ctx.channel().remoteAddress());
         }
     }
@@ -214,12 +215,8 @@ public class Client {
         return response;
     }
 
-    public boolean isConnected() {
-        return connected;
-    }
-
-    public ConnectionConfig getConfig() {
-        return config;
+    public SocketAddress getLocalAddress() {
+        return localAddress;
     }
 
     public Channel getChannel() {
@@ -228,20 +225,22 @@ public class Client {
 
     public boolean reConnect() {
 
-        int reConNum = 0;
-
-        do {
-            init(config.getHost(), config.getPort());
-            reConNum++;
-            if (!connected) {
-                try {
-                    TimeUnit.SECONDS.sleep(5);
-                } catch (InterruptedException e) {
-                    LOGGER.warn("interrupted while reconnect server.");
-                    throw new RuntimeException(e.getMessage(), e);
+        int reConCounter = 0;
+        while (!connected && reConCounter < config.getReConnectTimes()) {
+            try {
+                ChannelFuture future = bootstrap.connect(config.getHost(), config.getPort());
+                TimeUnit.SECONDS.sleep(5);
+                this.channel = future.channel();
+                if (channel.isActive()) {
+                    connected = true;
+                    localAddress = channel.localAddress();
                 }
+                reConCounter++;
+            } catch (InterruptedException e) {
+                LOGGER.warn("interrupted while reconnect server.");
+                throw new RuntimeException(e.getMessage(), e);
             }
-        } while(reConNum < maxReConnectNum && !connected);
+        }
         return connected;
     }
 }

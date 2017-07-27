@@ -79,36 +79,30 @@ public class Producer {
         boolean result = false;
         Message response = null;
         int reSendCounter = 0;
+        int reConCounter = 0;
 
-        if (client.reConnect()) {
+        while (client.reConnect() && reSendCounter < config.getReSendTimes()) {
             RequestFuture responseFuture = client.write(request);
+            try {
+                response = responseFuture.waitResponse(config.getResponseTimeOut(), TimeUnit.MILLISECONDS);
+            } catch (InterruptedException e) {
+                LOGGER.warn("interrupted while waiting for response <- {}.", request);
+                throw new RuntimeException(e.getMessage(), e);
+            }
 
-            while (reSendCounter < config.getReSendTimes()) {
-                try {
-                    response = responseFuture.waitResponse(config.getResponseTimeOut(), TimeUnit.MILLISECONDS);
-                } catch (InterruptedException e) {
-                    LOGGER.warn("interrupted while waiting for response <- {}.", request);
-                    throw new RuntimeException(e.getMessage(), e);
-                }
-
-                if (response == null) {
-                    LOGGER.warn("timeout while waiting for response <- {}.", request);
-                    reSendCounter++;
-                }
-                else if (response.getType() == TransferType.EXCEPTION.value) {
-                    LOGGER.error("something wrong happened to server handling request {}.", request);
-                    break;
-                }
-                else {
-                    result = true;
-                    break;
-                }
+            if (response == null) {
+                LOGGER.warn("timeout while waiting for response <- {}.", request);
+                reSendCounter++;
+            }
+            else if (response.getType() == TransferType.EXCEPTION.value) {
+                LOGGER.error("something wrong happened to server handling request {}.", request);
+                break;
+            }
+            else {
+                result = true;
+                break;
             }
         }
-        else {
-            LOGGER.warn("can not reconnect to server when send {}.", request);
-        }
-
         return result;
     }
 
@@ -153,7 +147,7 @@ public class Producer {
 
     public String getMessageId(int seqId) {
 
-        return client.getChannel().localAddress().toString() + Thread.currentThread().toString() + seqId;
+        return client.getLocalAddress().toString() + Thread.currentThread().toString() + seqId;
     }
 
     public void bindService(Service service, Object... objects) {
