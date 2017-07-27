@@ -9,7 +9,6 @@ import com.rie.LightingMQ.util.DataUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -27,20 +26,21 @@ public class DefaultFetchRequestHandler implements RequestHandler{
         List<Topic> list = request.getBody();
         List<Topic> resList = new ArrayList<>(list.size());
         for (Topic topic : list) {
-            Topic temp = null;
-            TopicQueue topicQueue = TopicQueuePool.getTopicQueue(topic.getTopicName());
-            if (topicQueue != null) {
-                byte[] bytes = topicQueue.poll();
-                if (bytes != null) {
-                    temp = (Topic) DataUtil.deserialize(bytes);
-                }
-            }
 
-            if (temp != null) {
-                resList.add(temp);
-            }
-            else {
-                System.out.println("null");
+            TopicQueue topicQueue = TopicQueuePool.getTopicQueue(topic.getTopicName());
+            if (null != topicQueue) {
+                byte[] bytes = null;
+                //按照consumer需求顺序获取
+                if (topic.isOrder() && topic.getFileNo() != 0 && topic.getOffset() >= 0) {
+                    bytes = topicQueue.offsetRead(topic.getFileNo(), topic.getOffset());
+                }
+                else { //根据当前队列的readerIndex消费
+                    bytes = topicQueue.poll();
+                }
+                Topic temp = (Topic) DataUtil.deserialize(bytes);
+                if (temp != null) {
+                    resList.add(temp);
+                }
             }
         }
         response.setBody(resList);
