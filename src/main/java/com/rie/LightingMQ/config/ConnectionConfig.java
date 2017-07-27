@@ -37,6 +37,12 @@ public class ConnectionConfig extends Config{
         return getString("connection.host", null);
     }
 
+    public int getReConnectTimes() {
+
+        return getInt("reConnectTimes", 3);
+    }
+
+
     public int getResponseTimeOut() {
 
         return getInt("responseTimeOut", 5000);
