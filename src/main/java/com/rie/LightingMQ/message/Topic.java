@@ -11,7 +11,8 @@ public class Topic implements Serializable {
 
     private final static int DEFAULT_CONTENTS_NUM = 20;
     private String topicName;
-    private int readCounter;
+    private int readCounter;  //已读取总数量
+    private boolean order = false;  //是否按offset自定义消费
     private List<Serializable> contents = new ArrayList<>(DEFAULT_CONTENTS_NUM);
 
     public Topic() {
@@ -47,6 +48,14 @@ public class Topic implements Serializable {
         if (content != null) {
             contents.add(content);
         }
+    }
+
+    public boolean isOrder() {
+        return order;
+    }
+
+    public void setOrder(boolean order) {
+        this.order = order;
     }
 
     @Override

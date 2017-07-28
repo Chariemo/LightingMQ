@@ -23,10 +23,10 @@ public class Producer {
 
     private final static Logger LOGGER = LoggerFactory.getLogger(Producer.class);
     private static Client client;
-    private Service service;
-    private Object[] objects;
+    private Service service; //服务
+    private Object[] objects; //服务入口参数
     private static ConnectionConfig config;
-    private static final Producer PRODUCER = new Producer();
+    private static final Producer PRODUCER = new Producer();    //单例模式
 
     private Producer() {
 
@@ -63,7 +63,7 @@ public class Producer {
         return unsafePublish(list);
     }
 
-    public boolean unsafePublish(List<Topic> topics) {
+    public boolean unsafePublish(List<Topic> topics) { //直接发布 不关注消息是否发布成功
 
         boolean result = false;
         Message request = Message.newRequestMessage();
@@ -81,7 +81,7 @@ public class Producer {
         int reSendCounter = 0;
         int reConCounter = 0;
 
-        while (client.reConnect() && reSendCounter < config.getReSendTimes()) {
+        while (client.reConnect() && reSendCounter < config.getReSendTimes()) { //重连 、 重发
             RequestFuture responseFuture = client.write(request);
             try {
                 response = responseFuture.waitResponse(config.getResponseTimeOut(), TimeUnit.MILLISECONDS);
@@ -113,6 +113,7 @@ public class Producer {
         return safePublish(timeout, timeUnit, list);
     }
 
+    //同步发布 关注是否发布成功
     public boolean safePublish(long timeout, TimeUnit timeUnit, List<Topic> topics) {
 
         boolean result = false;
@@ -121,25 +122,31 @@ public class Producer {
         request.setId(getMessageId(request.getSeqId()));
         request.setBody(topics);
 
-        if (send(request)) {
+        if (send(request)) {  //预发布成功
             try {
+                //进行同步业务操作
                 ServiceFuture serviceFuture = new ServiceFuture(timeout, timeUnit);
                 if (service == null) {
                     throw new NullPointerException("service is null");
                 }
                 serviceFuture.bind(service, objects);
-                if (serviceFuture.waitServiceResult()) {
+                if (serviceFuture.waitServiceResult()) { //业务操作成功
                     request.setBody(null);
                     request.setReqHandlerType(RequestHandlerType.PUBLISH.value);
                     if (send(request)) {
                         result = true;
                     }
                 }
+                else { //业务操作时报 通知broker删除缓存
+                    request.setType(TransferType.REPLY.value);
+                    send(request);
+                }
             } catch (InterruptedException e) {
                 LOGGER.warn("interrupted while waiting for service result.");
                 throw new RuntimeException(e.getMessage(), e);
             }
         }
+        //解绑业务操作
         this.service = null;
         this.objects = null;
         return result;
@@ -150,6 +157,7 @@ public class Producer {
         return client.getLocalAddress().toString() + Thread.currentThread().toString() + seqId;
     }
 
+    //绑定业务操作
     public void bindService(Service service, Object... objects) {
 
         this.service = service;

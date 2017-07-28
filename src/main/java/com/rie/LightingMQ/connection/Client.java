@@ -116,16 +116,16 @@ public class Client {
         @Override
         protected void messageReceived(ChannelHandlerContext channelHandlerContext, Message message) throws Exception {
 
-            if (message.getType() == TransferType.HEARTBEAT.value) {
+            if (message.getType() == TransferType.HEARTBEAT.value) { //心跳信息
                 LOGGER.info("client receive heartbeat message from server.");
             }
             else if (message.getType() == TransferType.EXCEPTION.value
                     || message.getType() == TransferType.REPLY.value) {
                 int id = message.getSeqId();
                 RequestFuture responseFuture = responseCache.get(id);
-                if (responseFuture != null) {
+                if (responseFuture != null) { //发送量过大导致待处理future缓存溢出
                     responseFuture.setResponse(message);
-                    responseFuture.release();
+                    responseFuture.release(); //通知接受者
                 }
                 else {
                     LOGGER.warn("request for response {} in cache was missing.", message);
@@ -145,7 +145,7 @@ public class Client {
                     case WRITER_IDLE:
                         LOGGER.info("---WRITER_IDLE---");
                         break;
-                    case ALL_IDLE:
+                    case ALL_IDLE:  //发送心跳
                         LOGGER.info("---ALL_IDLE---");
                         Message heartbeatMsg = Message.newHeartbeatMessage();
                         LOGGER.info("send heartbeat message to server.");
@@ -172,7 +172,6 @@ public class Client {
         @Override
         public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
 
-            ctx.fireExceptionCaught(cause);
         }
 
         @Override
@@ -184,7 +183,7 @@ public class Client {
         @Override
         public void channelInactive(ChannelHandlerContext ctx) throws Exception {
 
-            Client.this.connected = false;
+            Client.this.connected = false; //设置连接状态
             LOGGER.info("disconnected to server {}.", ctx.channel().remoteAddress());
         }
     }
@@ -192,17 +191,17 @@ public class Client {
     public RequestFuture write(final Message request) {
 
         final RequestFuture response = new RequestFuture(request.getSeqId());
-        responseCache.put(request.getSeqId(), response);
+        responseCache.put(request.getSeqId(), response); //异步发送 对future进行缓冲
 
         if (channel.isActive()) {
             this.channel.writeAndFlush(request).addListener(new ChannelFutureListener() {
                 @Override
                 public void operationComplete(ChannelFuture channelFuture) throws Exception {
-                    if (channelFuture.isSuccess()) {
+                    if (channelFuture.isSuccess()) { //发送成功
                         response.setSucceed_send(true);
                         return;
                     }
-                    responseCache.remove(response.getId());
+                    responseCache.remove(response.getId());  //发送失败 future从缓存中删除
                     response.setSucceed_send(false);
                     response.setCause(channelFuture.cause());
                     LOGGER.warn("send the request({}) to {} failed.({})", request, channelFuture.channel().remoteAddress());
@@ -226,7 +225,7 @@ public class Client {
     public boolean reConnect() {
 
         int reConCounter = 0;
-        while (!connected && reConCounter < config.getReConnectTimes()) {
+        while (!connected && reConCounter < config.getReConnectTimes()) {  //重新连接
             try {
                 ChannelFuture future = bootstrap.connect(config.getHost(), config.getPort());
                 TimeUnit.SECONDS.sleep(5);

@@ -7,13 +7,12 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * frame{head:[type(byte) + reqType(short) + seqId(int)] [body] [CRC32]} check with CRC32
+ * frame{head:[id(String) + type(byte) + reqType(short) + seqId(int)] [body] [CRC32]} check with CRC32
  * Created by Charley on 2017/7/17.
  */
 public class Message implements Serializable {
 
     private final static AtomicInteger SEQ = new AtomicInteger(1);
-    public final static int HEAD_LEN = 1 + 2 + 4;
     public final static int CRC_LEN = Long.BYTES;
     //head
     private String id;

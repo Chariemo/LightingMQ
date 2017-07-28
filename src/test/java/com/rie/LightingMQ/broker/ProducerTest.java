@@ -42,7 +42,7 @@ public class ProducerTest implements Service{
     public boolean service(Object... objects) throws InterruptedException {
 
         System.out.println("service: " + objects[0]);
-        TimeUnit.SECONDS.sleep(2);
+        TimeUnit.SECONDS.sleep(1);
         return true;
     }
 }

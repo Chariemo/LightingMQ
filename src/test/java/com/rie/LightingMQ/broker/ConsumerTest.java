@@ -4,6 +4,8 @@ import com.rie.LightingMQ.consumer.Consumer;
 import com.rie.LightingMQ.consumer.Subscriber;
 import com.rie.LightingMQ.message.Topic;
 
+import java.util.concurrent.TimeUnit;
+
 /**
  * Created by Charley on 2017/7/21.
  */
@@ -19,8 +21,19 @@ public class ConsumerTest {
             }
         };
         subscriber.subscribeTopic("test");
+        subscriber.setInOrder(true);
         consumer.addSubscriber(subscriber);
-        consumer.startup();
-//        subscriber.pull();
+//        consumer.startup();
+        int i = 0;
+        try {
+            while (i < 5) {
+                subscriber.pull();
+                TimeUnit.MILLISECONDS.sleep(500);
+                i++;
+            }
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+        consumer.stop();
     }
 }

@@ -22,6 +22,7 @@ public class ServerConfig extends Config{
         super(confFile);
     }
 
+    //默认服务器配置文件
     public static ServerConfig getDefaultServerConfig() {
 
         String configPath = Thread.currentThread().getContextClassLoader().getResource(DEFAULT_SERVER_CONFIF).getPath();
@@ -36,11 +37,13 @@ public class ServerConfig extends Config{
         return getString("LMQ.host", null);
     }
 
+    //数据目录
     public String getDataDir() {
 
         return getString("LMQ.dataDir", null);
     }
 
+    //客户端最长无响应时间
     public int getReadIdleTime() {
         return getInt("readIdleTime", 20000);
     }

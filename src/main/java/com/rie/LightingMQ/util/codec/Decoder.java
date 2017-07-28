@@ -6,11 +6,15 @@ import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.marshalling.MarshallingDecoder;
 import io.netty.handler.codec.marshalling.UnmarshallerProvider;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Created by Charley on 2017/7/18.
  */
 public class Decoder extends MarshallingDecoder{
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(MarshallingDecoder.class);
 
     public Decoder(UnmarshallerProvider provider) {
         super(provider);
@@ -32,7 +36,8 @@ public class Decoder extends MarshallingDecoder{
             if (crcRead != crc32) {
                 byteBuf.discardReadBytes();
                 byteBuf.release();
-                throw new RuntimeException("CRC WRONG");
+                LOGGER.error("crc wrong {}.");
+                return null;
             }
             byteBuf.readerIndex(0);
             byteBuf.writerIndex(byteBuf.readableBytes() - Message.CRC_LEN);

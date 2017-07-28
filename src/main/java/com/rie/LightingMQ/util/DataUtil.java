@@ -47,6 +47,7 @@ public class DataUtil {
         return null;
     }
 
+    // 计算CRC32 校验码
     public static long calculateCRC(ByteBuf data, int offset, int len) {
 
         long result = 0L;

@@ -37,27 +37,31 @@ public class ConnectionConfig extends Config{
         return getString("connection.host", null);
     }
 
+    //重连次数
     public int getReConnectTimes() {
 
         return getInt("reConnectTimes", 3);
     }
 
-
+    //最长等待回复时间
     public int getResponseTimeOut() {
 
         return getInt("responseTimeOut", 5000);
     }
 
+    //重发次数
     public int getReSendTimes() {
 
         return getInt("reSendTimes", 3);
     }
 
+    //客户端超过最长空闲时间后发送心跳
     public int getAllIdleTime() {
 
         return getInt("allIdleTime", 10000);
     }
 
+    //pull频率
     public int getConsumerPeriod() {
 
         return getInt("consumer.period", 60000);

@@ -155,7 +155,7 @@ public class Server {
 
             Message response = null;
 
-            if (message.getType() == TransferType.HEARTBEAT.value) {
+            if (message.getType() == TransferType.HEARTBEAT.value) {  //心跳信息
                 LOGGER.info("server receive heartbeat from client.");
                 response = Message.newHeartbeatMessage();
                 channelHandlerContext.writeAndFlush(response).addListener(new ChannelFutureListener() {
@@ -174,17 +174,19 @@ public class Server {
                 RequestHandler handler = requestHandlers.get(message.getReqHandlerType());
                 if (handler != null) {
                     response = handler.requestHandle(message);
-                    channelHandlerContext.writeAndFlush(response).addListener(new ChannelFutureListener() {
-                        @Override
-                        public void operationComplete(ChannelFuture channelFuture) throws Exception {
-                            if (channelFuture.isSuccess()) {
-                                LOGGER.info("send response for ({}) to {} succeed.", message, channelHandlerContext.channel().remoteAddress());
+                    if (response != null) {
+                        channelHandlerContext.writeAndFlush(response).addListener(new ChannelFutureListener() {
+                            @Override
+                            public void operationComplete(ChannelFuture channelFuture) throws Exception {
+                                if (channelFuture.isSuccess()) {
+                                    LOGGER.info("send response for ({}) to {} succeed.", message, channelHandlerContext.channel().remoteAddress());
+                                }
+                                else {
+                                    LOGGER.info("send response for ({}) to {} failed.", message, channelHandlerContext.channel().remoteAddress());
+                                }
                             }
-                            else {
-                                LOGGER.info("send response for ({}) to {} failed.", message, channelHandlerContext.channel().remoteAddress());
-                            }
-                        }
-                    });
+                        });
+                    }
                 }
                 else {
                     response = Message.newExceptionMessage();
@@ -196,7 +198,6 @@ public class Server {
         @Override
         public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
 
-            ctx.fireExceptionCaught(cause);
         }
 
         @Override
@@ -217,7 +218,7 @@ public class Server {
             if (evt instanceof IdleStateEvent) {
                 IdleStateEvent event = (IdleStateEvent) evt;
                 switch (event.state()) {
-                    case READER_IDLE:
+                    case READER_IDLE: // 客户端规定时间无响应
                         LOGGER.info("---READER_IDLE---");
                         ctx.close();
                         break;
