@@ -52,7 +52,7 @@ public class TopicQueuePool {
         }
 
         //扫描该目录下的所有index文件 获取相应topic queue
-        this.queueMap = scanDir(fileDir, false);
+        this.queueMap = scanDir(fileDir);
 
         scheduler.scheduleAtFixedRate(new Runnable() {
 
@@ -68,7 +68,7 @@ public class TopicQueuePool {
 
     }
 
-    public Map<String, TopicQueue> scanDir(File fileDir, boolean backup) {
+    public Map<String, TopicQueue> scanDir(File fileDir) {
 
         Map<String, TopicQueue> tempTQMap = new HashMap<>();
         File[] indexFiles = fileDir.listFiles(new FilenameFilter() {
@@ -81,7 +81,7 @@ public class TopicQueuePool {
 
         for (File indexFile : indexFiles) {
             String queueName = getQueueNameFromIndex(indexFile.getName());
-            tempTQMap.put(queueName, new TopicQueue(queueName, fileDir.getAbsolutePath(), backup));
+            tempTQMap.put(queueName, new TopicQueue(queueName, fileDir.getAbsolutePath()));
         }
 
         return tempTQMap;
@@ -98,12 +98,13 @@ public class TopicQueuePool {
         return queueName.split("_")[1];
     }
 
+    // 删除已读数据块
     public void deleteOldBlockFile() {
 
         String oldFilePath = DELETING_QUEUE.poll();
         if (StringUtils.isNotBlank(oldFilePath)) {
             File oldFile = new File(oldFilePath);
-            if (getTimeFromLastMod(oldFile) > 48) {
+            if (getTimeFromLastMod(oldFile) > 48) { // 已读数据块最后修改时间超过48h 删除
                 oldFile.setReadable(false);
                 if (!oldFile.delete()) {
                     LOGGER.warn("block file: {} delete failed.", oldFilePath);
@@ -160,6 +161,7 @@ public class TopicQueuePool {
         }
     }
 
+    // 从queuePool中获取topicQueue
     public synchronized static TopicQueue getTopicQueue(String topicName) {
 
         if (StringUtils.isBlank(topicName)) {
@@ -171,11 +173,12 @@ public class TopicQueuePool {
         return TQPINSTANCE.queueMap.get(topicName);
     }
 
+    //从queuePool中获取topicQueue 不存在则创建
     public synchronized static TopicQueue getOrCreateTopicQueue(String topicName) {
 
         TopicQueue topicQueue = getTopicQueue(topicName);
         if (topicQueue == null) {
-            topicQueue = new TopicQueue(topicName, TQPINSTANCE.dataDir, false);
+            topicQueue = new TopicQueue(topicName, TQPINSTANCE.dataDir);
             TQPINSTANCE.queueMap.put(topicName, topicQueue);
         }
         return topicQueue;

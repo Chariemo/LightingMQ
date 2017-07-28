@@ -5,6 +5,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
 import java.util.AbstractQueue;
 import java.util.Iterator;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -18,32 +19,45 @@ public class TopicQueue extends AbstractQueue<byte[]>{
 
     private static final Logger LOGGER = LoggerFactory.getLogger(TopicQueue.class);
     private String fileDir;
-    private Index index;
-    private String queueName;
-    private TopicQueueBlock readBlock;
-    private TopicQueueBlock offsetReadBlock;
-    private TopicQueueBlock writeBlock;
+    private Index index;    //读写索引
+    private String queueName;   //队列名称
+    private TopicQueueBlock readBlock;  //读字块
+    private TopicQueueBlock offsetReadBlock;    //offset读字块
+    private TopicQueueBlock writeBlock; //写字块
     private ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
+    private OffsetHelper offsetHelper;
     private Lock readLock = lock.readLock();
     private Lock writeLock = lock.writeLock();
     private AtomicInteger size;
 
-    public TopicQueue(String queueName, String fileDir, boolean backup) {
+    public TopicQueue(String queueName, String fileDir) {
 
         this.queueName = queueName;
-        this.fileDir = fileDir;
+        this.fileDir = String.format("%s/%s", fileDir, queueName);
+        File tempFile = new File(this.fileDir);
+        if (!tempFile.exists()) {
+            tempFile.mkdir();
+        }
+        this.fileDir = tempFile.getAbsolutePath();
+
+        // 初始化offset读Helper
+        this.offsetHelper = new OffsetHelper(queueName, this.fileDir);
+        // 初始化索引
         this.index = new IndexImpl(queueName, fileDir);
         System.out.println("readFileNo: " + index.getReadFileNo() + " writeFileNo: " + index.getWriteFileNo());
         System.out.println("readerIndex: "+ index.getReaderIndex() + " writerIndex: " + index.getWriterIndex());
+        // 队列大小
         this.size = new AtomicInteger(index.getWriteCounter() - index.getReadCounter());
-        this.writeBlock = new TopicQueueBlock(TopicQueueBlock.formatBlockFilePath(fileDir, queueName,
-                index.getWriteFileNo()), index);
+        // 写字块初始化
+        this.writeBlock = new TopicQueueBlock(TopicQueueBlock.formatBlockFilePath(this.fileDir, queueName,
+                index.getWriteFileNo()), index, this.offsetHelper);
         if (index.getReadFileNo() == index.getWriteFileNo()) {
+            // 读写字块为一个文件 直接复制写字块
             this.readBlock = this.writeBlock.duplicate();
         }
         else {
-            this.readBlock = new TopicQueueBlock(TopicQueueBlock.formatBlockFilePath(fileDir,
-                    queueName, index.getReadFileNo()), index);
+            this.readBlock = new TopicQueueBlock(TopicQueueBlock.formatBlockFilePath(this.fileDir,
+                    queueName, index.getReadFileNo()), index, this.offsetHelper);
         }
     }
 
@@ -57,6 +71,7 @@ public class TopicQueue extends AbstractQueue<byte[]>{
         return this.size.get();
     }
 
+    // 转化下一写字块
     public void rotateNextWriteBlock() {
 
         int nextWriteBlockFileNo = index.getWriteFileNo() + 1;
@@ -68,7 +83,7 @@ public class TopicQueue extends AbstractQueue<byte[]>{
             writeBlock.close();
         }
         writeBlock = new TopicQueueBlock(TopicQueueBlock.formatBlockFilePath(fileDir, queueName, nextWriteBlockFileNo),
-                 index);
+                 index, this.offsetHelper);
 
         index.setWriteFileNo(nextWriteBlockFileNo);
         index.setWriterIndex(0);
@@ -93,6 +108,7 @@ public class TopicQueue extends AbstractQueue<byte[]>{
         }
     }
 
+    // 转化下一读字块
     public void rotateNextReadBlock() {
 
         if (index.getReadFileNo() == index.getWriteFileNo()) {
@@ -106,12 +122,12 @@ public class TopicQueue extends AbstractQueue<byte[]>{
         }
         else {
             readBlock = new TopicQueueBlock(TopicQueueBlock.formatBlockFilePath(fileDir, queueName,
-                    nextReadBlockFileNo), index);
+                    nextReadBlockFileNo), index, this.offsetHelper);
         }
 
         index.setReadFileNo(nextReadBlockFileNo);
         index.setReaderIndex(0);
-        TopicQueuePool.toClear(oldBlockFilePath);
+        TopicQueuePool.toClear(oldBlockFilePath); //旧读字块加入预删除队列
     }
 
 
@@ -134,35 +150,29 @@ public class TopicQueue extends AbstractQueue<byte[]>{
         }
     }
 
-    public byte[] offsetRead(int fileNo, int offset) {
+    public byte[] offsetRead(int readCounter) {
 
+        OffsetPOJO offsetPOJO = offsetHelper.read(readCounter); //根据readCounter获取数据的索引信息
+        System.out.println("offsetPOJO" + offsetPOJO);
         byte[] result = null;
-        if (null != offsetReadBlock) {
-            String blockFilePath = offsetReadBlock.getBlockFilePath();
-            String[] nameNodes = blockFilePath.split("_");
-            if (nameNodes.length > 2 && StringUtils.isNotBlank(nameNodes[2])) {
-                String curFileNo = nameNodes[2].split(".")[0];
-                if (StringUtils.isNotBlank(curFileNo) && !StringUtils.equals("" + fileNo, curFileNo)) {
-                    this.offsetReadBlock.close();
-                    this.offsetReadBlock = new TopicQueueBlock(TopicQueueBlock.formatBlockFilePath(
-                            fileDir, queueName, fileNo
-                    ), null);
-                }
+
+        if (null != offsetPOJO) {
+            if (null == this.offsetReadBlock) {
+                this.offsetReadBlock = new TopicQueueBlock(TopicQueueBlock.formatBlockFilePath(
+                        fileDir, queueName, offsetPOJO.getFileNo()
+                ), null, this.offsetHelper);
+            }
+
+            readLock.lock();
+            try {
+                result = offsetReadBlock.read(offsetPOJO.getOffset());
+                return result;
+            } finally {
+                readLock.unlock();
             }
         }
-        else {
-            offsetReadBlock = new TopicQueueBlock(TopicQueueBlock.formatBlockFilePath(
-                    fileDir, queueName, fileNo
-            ), null);
-        }
 
-        readLock.lock();
-        try {
-            result = offsetReadBlock.read(offset);
-            return result;
-        } finally {
-            readLock.unlock();
-        }
+        return null;
     }
 
     @Override
@@ -191,6 +201,8 @@ public class TopicQueue extends AbstractQueue<byte[]>{
         if (index.getReadFileNo() != index.getWriteFileNo()) {
             readBlock.close();
         }
+        offsetReadBlock.close();
+        offsetHelper.close();
         index.reset();
         index.close();
     }

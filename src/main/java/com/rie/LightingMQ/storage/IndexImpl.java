@@ -32,11 +32,10 @@ public class IndexImpl implements Index {
     public IndexImpl(String queueName, String fileDir) {
 
         String indexFilePath = formatIndexFilePath(queueName, fileDir);
-        System.out.println("index file path: " + indexFilePath);
         File file = new File(indexFilePath);
         try {
 
-            if (file.exists()) {
+            if (file.exists()) {    //索引文件已存在 直接读取
                 this.indexFile = new RandomAccessFile(file, "rw");
                 byte[] magic = new byte[8];
                 this.indexFile.read(magic, 0, 8);
@@ -53,11 +52,11 @@ public class IndexImpl implements Index {
                 this.index = indexFileChannel.map(FileChannel.MapMode.READ_WRITE, 0, INDEX_SIZE);
                 this.index = index.load();
             }
-            else {
+            else {  //索引文件不存在 新建并初始化
                 this.indexFile = new RandomAccessFile(file, "rw");
                 this.indexFileChannel = indexFile.getChannel();
                 this.index = indexFileChannel.map(FileChannel.MapMode.READ_WRITE, 0, INDEX_SIZE);
-                setMagic();
+                setMagic(); //设置魔趣序列 校验用
                 setReadFileNo(1);
                 setReaderIndex(0);
                 setReadCounter(0);
@@ -157,7 +156,7 @@ public class IndexImpl implements Index {
     }
 
     @Override
-    public void sync() {
+    public void sync() {    //同步到磁盘
 
         if (index != null) {
             index.force();
@@ -170,6 +169,7 @@ public class IndexImpl implements Index {
         if (indexFile != null) {
             sync();
             try {
+                // 通过反射 获取权限进行unmap操作
                 Method method = FileChannelImpl.class.getDeclaredMethod("unmap", MappedByteBuffer.class);
                 method.setAccessible(true);
                 method.invoke(FileChannelImpl.class, index);
