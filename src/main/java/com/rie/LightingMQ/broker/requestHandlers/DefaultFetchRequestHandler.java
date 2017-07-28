@@ -9,6 +9,7 @@ import com.rie.LightingMQ.util.DataUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.sound.midi.Soundbank;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -22,29 +23,46 @@ public class DefaultFetchRequestHandler implements RequestHandler{
     @Override
     public Message requestHandle(Message request) {
 
-        Message response = Message.newResponseMessage();
+        Message response = null;
         List<Topic> list = request.getBody();
         List<Topic> resList = new ArrayList<>(list.size());
         for (Topic topic : list) {
-
+            //获取队列
             TopicQueue topicQueue = TopicQueuePool.getTopicQueue(topic.getTopicName());
             if (null != topicQueue) {
                 byte[] bytes = null;
+                Topic temp = null;
                 //按照consumer需求顺序获取
-                if (topic.isOrder() && topic.getFileNo() != 0 && topic.getOffset() >= 0) {
-                    bytes = topicQueue.offsetRead(topic.getFileNo(), topic.getOffset());
+                if (topic.isOrder() && topic.getReadCounter() > 0) {
+                    bytes = topicQueue.offsetRead(topic.getReadCounter());
+                    if (bytes != null) {
+                        temp = (Topic) DataUtil.deserialize(bytes);
+                        temp.setReadCounter(topic.getReadCounter());
+                    }
                 }
                 else { //根据当前队列的readerIndex消费
                     bytes = topicQueue.poll();
+                    if (null != bytes) {
+                        temp = (Topic) DataUtil.deserialize(bytes);
+                        temp.setReadCounter(topicQueue.getIndex().getReadCounter());
+                    }
                 }
-                Topic temp = (Topic) DataUtil.deserialize(bytes);
-                if (temp != null) {
+
+                if (temp != null) { //获取成功
                     resList.add(temp);
                 }
             }
         }
-        response.setBody(resList);
-        response.setSeqId(request.getSeqId());
+        if (!resList.isEmpty()) {
+            response = Message.newResponseMessage();
+            response.setBody(resList);
+            response.setSeqId(request.getSeqId());
+        }
+        else { //获取失败
+            response = Message.newExceptionMessage();
+            response.setSeqId(request.getSeqId());
+        }
         return response;
+
     }
 }

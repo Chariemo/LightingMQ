@@ -3,6 +3,7 @@ package com.rie.LightingMQ.broker.requestHandlers;
 import com.rie.LightingMQ.broker.RequestHandler;
 import com.rie.LightingMQ.message.Message;
 import com.rie.LightingMQ.message.Topic;
+import com.rie.LightingMQ.message.TransferType;
 import com.rie.LightingMQ.storage.TopicQueue;
 import com.rie.LightingMQ.storage.TopicQueuePool;
 import com.rie.LightingMQ.util.DataUtil;
@@ -25,7 +26,7 @@ public class DefaultPublishRequestHandler implements RequestHandler{
         String messageId = request.getId();
         Message response = null;
 
-        if (null == messageId && contents != null) {
+        if (null == messageId && contents != null) { // 直接发布
 
             if (store(contents)) {
                 response = Message.newResponseMessage();
@@ -35,13 +36,16 @@ public class DefaultPublishRequestHandler implements RequestHandler{
                 response = Message.newExceptionMessage();
             }
         }
-        else if (DefaultPrePublishRequestHandler.PRE_CACHE.containsKey(messageId)) {
+        else if (request.getType() == TransferType.REPLY.value) {
+
+            DefaultPrePublishRequestHandler.PRE_CACHE.remove(messageId);
+            return null;
+        }
+        else if (DefaultPrePublishRequestHandler.PRE_CACHE.containsKey(messageId)) { // 安全发布
 
             if (!store(DefaultPrePublishRequestHandler.PRE_CACHE.get(messageId))) {
                 response = Message.newExceptionMessage();
-            }
-            else {
-                DefaultPrePublishRequestHandler.PRE_CACHE.remove(messageId);
+            } else {
                 response = Message.newResponseMessage();
                 response.setSeqId(request.getSeqId());
             }

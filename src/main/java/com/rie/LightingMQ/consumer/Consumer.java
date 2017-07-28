@@ -29,11 +29,12 @@ public class Consumer {
     private static Client client;
     private static ConnectionConfig config;
     private ReadWriteLock readWriteLock = new ReentrantReadWriteLock();
-    private Lock readLock = readWriteLock.readLock();
-    private Lock writeLock = readWriteLock.writeLock();
-    private Set<Subscriber> subscribers = new HashSet<>(DEFAULT_SUBSCRIBER_NUM);
+    private Lock readLock = readWriteLock.readLock(); //订阅者读取锁
+    private Lock writeLock = readWriteLock.writeLock();  //订阅者写入锁
+    private Set<Subscriber> subscribers = new HashSet<>(DEFAULT_SUBSCRIBER_NUM); //订阅者
+    //通过当前消费者组订阅的主题以及各自订阅者数量
     private Map<String, AtomicInteger> topics = new ConcurrentHashMap<>(DEFAULT_TOPICS_NUM);
-    private static final Consumer CONSUMER = new Consumer();
+    private static final Consumer CONSUMER = new Consumer(); //单例模式
 
     private Consumer() {
 
@@ -65,7 +66,7 @@ public class Consumer {
 
         List<Topic> rtTopics = null;
         if (!topics.isEmpty()) {
-            rtTopics = fetch(topics.keySet().toArray(new String[0]));
+            rtTopics = fetch(topics, false);  //消费者组按readIndex进行获取
         }
 
         if (rtTopics != null && !rtTopics.isEmpty()) {
@@ -73,8 +74,8 @@ public class Consumer {
             try {
                 for (Topic topic : rtTopics) {
                     for (Subscriber subscriber : subscribers) {
-                        if (null != subscriber.getTopics() && subscriber.getTopics().contains(topic.getTopicName())) {
-                            subscriber.notify(topic);
+                        if (null != subscriber.getTopics() && subscriber.isSubscrib(topic.getTopicName())) {
+                            subscriber.notify(topic); //通知各订阅者
                         }
                     }
                 }
@@ -84,25 +85,31 @@ public class Consumer {
         }
     }
 
-    public List<Topic> fetch(String[] topics) {
+    public List<Topic> fetch(Map<String, AtomicInteger> topicMaps, boolean inOrder) {
 
-        return fetch(Arrays.asList(topics));
+        Iterator<Map.Entry<String, AtomicInteger>> iterator = topicMaps.entrySet().iterator();
+        List<Topic> requestTopics = new ArrayList<>(topicMaps.size());
+        while (iterator.hasNext()) {
+            Map.Entry<String, AtomicInteger> entry = iterator.next();
+            Topic topic = new Topic(entry.getKey());
+            if (inOrder) { //按照订阅者自定义顺序获取
+                topic.setOrder(true);
+                topic.setReadCounter(entry.getValue().get());
+            }
+            requestTopics.add(topic);
+        }
+        return fetch(requestTopics);
     }
 
-    public List<Topic> fetch(List<String> topics) {
+    public List<Topic> fetch(List<Topic> requestTopics) {
 
         List<Topic> rtTopics = null;
         Message response = null;
 
-        if (client.reConnect()) {
-            List<Topic> requestTopics = new ArrayList<>(topics.size());
-            for (String topicName : topics) {
-                Topic topic = new Topic(topicName);
-                requestTopics.add(topic);
-            }
+        if (client.reConnect()) { //查看链接状态 或重连
             Message request = Message.newRequestMessage();
             request.setReqHandlerType(RequestHandlerType.FETCH.value);
-            request.setId(getMessageId(request.getSeqId()));
+            request.setId(getMessageId(request.getSeqId())); //设置信息唯一值 防止重发导致消息重复发布
             request.setBody(requestTopics);
 
             RequestFuture requestFuture = client.write(request);
@@ -113,10 +120,10 @@ public class Consumer {
                 throw new RuntimeException(e.getMessage(), e);
             }
 
-            if (response == null) {
+            if (response == null) { //固定时间未获取到服务器响应
                 LOGGER.warn("timeout while waiting for response <- {}.", request);
             }
-            else if (response.getType() == TransferType.EXCEPTION.value) {
+            else if (response.getType() == TransferType.EXCEPTION.value) { //服务器获取数据异常
                 LOGGER.error("something error happened for request({}) to server.", request);
             }
             else {
@@ -144,7 +151,7 @@ public class Consumer {
         try {
             if (null != subscriber && !subscribers.contains(subscriber)) {
                 subscribers.add(subscriber);
-                addSubTopic(subscriber.getTopics());
+                addSubTopic(subscriber.getTopics().keySet());
             }
         } finally {
             writeLock.unlock();
@@ -157,7 +164,7 @@ public class Consumer {
         try {
             if (null != subscriber && subscribers.contains(subscriber)) {
                 subscribers.remove(subscriber);
-                delSubTopic(subscriber.getTopics());
+                delSubTopic(subscriber.getTopics().keySet());
             }
         } finally {
             writeLock.unlock();
@@ -184,6 +191,7 @@ public class Consumer {
 
         if (null != delTopics && !delTopics.isEmpty()) {
             for (String topicName : delTopics) {
+                //改主题的订阅者为0时 从订阅队列中删除
                 if (topics.containsKey(topicName) && topics.get(topicName).decrementAndGet() == 0) {
                     topics.remove(topicName);
                 }
@@ -193,6 +201,7 @@ public class Consumer {
 
     public void startup() {
 
+        //主动pull
         Executors.newSingleThreadScheduledExecutor().scheduleAtFixedRate(new Runnable() {
 
             @Override

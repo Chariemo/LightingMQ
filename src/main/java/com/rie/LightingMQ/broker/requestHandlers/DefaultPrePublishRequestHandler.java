@@ -22,8 +22,8 @@ public class DefaultPrePublishRequestHandler implements RequestHandler{
     public Message requestHandle(Message request) {
 
         Message response = null;
-        if (null != request.getBody()) {
-            if (!PRE_CACHE.containsKey(request.getId())) {
+        if (null != request.getBody()) { //预发布 缓存
+            if (!PRE_CACHE.containsKey(request.getId())) { //防止重发导致重复入库
                 PRE_CACHE.put(request.getId(), request.getBody());
             }
             response = Message.newResponseMessage();
