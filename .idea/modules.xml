@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/LightingMQ.iml" filepath="$PROJECT_DIR$/LightingMQ.iml" />
+      <module fileurl="file://$PROJECT_DIR$/LightningMQ.iml" filepath="$PROJECT_DIR$/LightningMQ.iml" />
     </modules>
   </component>
 </project>
