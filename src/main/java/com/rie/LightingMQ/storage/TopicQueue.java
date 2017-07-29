@@ -23,6 +23,7 @@ public class TopicQueue extends AbstractQueue<byte[]>{
     private String queueName;   //队列名称
     private TopicQueueBlock readBlock;  //读字块
     private TopicQueueBlock offsetReadBlock;    //offset读字块
+    private int offsetReadFileNo;
     private TopicQueueBlock writeBlock; //写字块
     private ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
     private OffsetHelper offsetHelper;
@@ -157,9 +158,17 @@ public class TopicQueue extends AbstractQueue<byte[]>{
         byte[] result = null;
 
         if (null != offsetPOJO) {
-            if (null == this.offsetReadBlock) {
+            if (null == this.offsetReadBlock) { //初始化offsetReadBLock
                 this.offsetReadBlock = new TopicQueueBlock(TopicQueueBlock.formatBlockFilePath(
                         fileDir, queueName, offsetPOJO.getFileNo()
+                ), null, this.offsetHelper);
+                this.offsetReadFileNo = offsetPOJO.getFileNo();
+            }
+            else if (this.offsetReadFileNo != offsetPOJO.getFileNo()) {  //判断当前offsetReadBlock是否与readCounter对应
+                this.offsetReadBlock.close();
+                this.offsetReadFileNo = offsetPOJO.getFileNo();
+                this.offsetReadBlock = new TopicQueueBlock(TopicQueueBlock.formatBlockFilePath(
+                        fileDir, queueName, this.offsetReadFileNo
                 ), null, this.offsetHelper);
             }
 

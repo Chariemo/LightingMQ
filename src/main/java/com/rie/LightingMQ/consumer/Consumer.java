@@ -28,6 +28,7 @@ public class Consumer {
     private static final int DEFAULT_TOPICS_NUM = 100;
     private static Client client;
     private static ConnectionConfig config;
+    private ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
     private ReadWriteLock readWriteLock = new ReentrantReadWriteLock();
     private Lock readLock = readWriteLock.readLock(); //订阅者读取锁
     private Lock writeLock = readWriteLock.writeLock();  //订阅者写入锁
@@ -125,6 +126,7 @@ public class Consumer {
             }
             else if (response.getType() == TransferType.EXCEPTION.value) { //服务器获取数据异常
                 LOGGER.error("something error happened for request({}) to server.", request);
+                this.scheduler.shutdown();
             }
             else {
                 rtTopics = response.getBody();
@@ -140,6 +142,7 @@ public class Consumer {
 
     public void stop() {
 
+        this.scheduler.shutdown();
         if (client != null) {
             client.stop();
         }
@@ -202,7 +205,7 @@ public class Consumer {
     public void startup() {
 
         //主动pull
-        Executors.newSingleThreadScheduledExecutor().scheduleAtFixedRate(new Runnable() {
+        this.scheduler.scheduleAtFixedRate(new Runnable() {
 
             @Override
             public void run() {

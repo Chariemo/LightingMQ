@@ -33,7 +33,7 @@ public class OffsetHelper {
     private ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
     private Lock readLock = lock.readLock();
     private Lock writeLock = lock.writeLock();
-    private Map<Integer, OffsetPOJO> offsetMap = new HashMap<>(); //保存readCounter对应的索引信息
+    private Map<Integer, OffsetPOJO> offsetMap = new HashMap<>(128); //保存readCounter对应的索引信息
 
     public OffsetHelper(String queueName, String fileDir) {
 
@@ -52,6 +52,7 @@ public class OffsetHelper {
                     pojo.setTimeStamp(byteBuffer.getLong());
                     pojo.setFileNo(byteBuffer.getInt());
                     pojo.setOffset(byteBuffer.getInt());
+                    System.out.println("offsetPOJO: " + pojo);
                     offsetMap.put(pojo.getCounter(), pojo);
                 }
             }
@@ -94,7 +95,6 @@ public class OffsetHelper {
             pojo.setFileNo(fileNo);
             pojo.setTimeStamp(timeStamp);
             pojo.setOffset(offset);
-
             offsetMap.put(counter, pojo);
         } finally {
             writeLock.unlock();

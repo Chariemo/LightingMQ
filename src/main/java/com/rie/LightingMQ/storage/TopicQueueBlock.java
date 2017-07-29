@@ -103,7 +103,6 @@ public class TopicQueueBlock {
         int len = data.length;
         int increment = len + Integer.BYTES;
         int writerIndex = index.getWriterIndex();
-        System.out.println("writeFileNo: " + index.getWriteFileNo() + " writerIndex: " + writerIndex);
         byteBuffer.position(writerIndex);
         byteBuffer.putInt(len);
         byteBuffer.put(data);

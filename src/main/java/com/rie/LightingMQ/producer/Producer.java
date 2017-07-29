@@ -23,8 +23,8 @@ public class Producer {
 
     private final static Logger LOGGER = LoggerFactory.getLogger(Producer.class);
     private static Client client;
-    private Service service; //服务
-    private Object[] objects; //服务入口参数
+    private volatile Service service; //服务
+    private volatile Object[] objects; //服务入口参数
     private static ConnectionConfig config;
     private static final Producer PRODUCER = new Producer();    //单例模式
 
@@ -127,7 +127,7 @@ public class Producer {
                 //进行同步业务操作
                 ServiceFuture serviceFuture = new ServiceFuture(timeout, timeUnit);
                 if (service == null) {
-                    throw new NullPointerException("service is null");
+                    return false;
                 }
                 serviceFuture.bind(service, objects);
                 if (serviceFuture.waitServiceResult()) { //业务操作成功
